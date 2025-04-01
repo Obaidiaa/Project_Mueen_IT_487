@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/layout/recyclerview_reminder_item.xml -->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="4dp"
+    app:cardElevation="1dp"
+    app:cardCornerRadius="12dp">
+
+<LinearLayout
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:orientation="vertical"
+android:padding="16dp">
+
+<TextView
+    android:id="@+id/textViewReminderTitle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+    android:maxLines="2"
+    android:ellipsize="end"
+    tools:text="Study Chapter 12 for the final exam next week" />
+
+<TextView
+    android:id="@+id/textViewReminderDescription"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+    android:textColor="?android:attr/textColorSecondary"
+    android:maxLines="3"
+android:ellipsize="end"
+tools:text="Focus on algorithms and data structures. Review lecture notes and practice problems." />
+
+<TextView
+    android:id="@+id/textViewReminderTime"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+android:gravity="end"
+android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+android:textColor="?attr/colorPrimary"
+tools:text="Oct 27, 2023 09:00 AM" />
+
+</LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>

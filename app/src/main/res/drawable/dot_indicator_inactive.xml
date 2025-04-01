@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <!-- Use outline or a less prominent color -->
+    <solid android:color="?attr/colorOutline"/> <!-- Good theme-aware choice -->
+    <!-- Or use a fixed color like: <solid android:color="#CCCCCC"/> -->
+    <size android:width="10dp" android:height="10dp"/>
+</shape>

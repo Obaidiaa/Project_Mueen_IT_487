@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_timer"
+        android:icon="@drawable/ic_baseline_timer_24"
+        android:title="Timer"/>
+
+    <item
+        android:id="@+id/navigation_notes"
+        android:icon="@drawable/ic_baseline_notes_24"
+        android:title="Notes"/>
+
+    <item
+        android:id="@+id/navigation_reminders"
+        android:icon="@drawable/ic_baseline_notifications_active_24"
+        android:title="Reminders"/>
+
+    <item
+        android:id="@+id/navigation_quotes"
+        android:icon="@drawable/ic_baseline_format_quote_24"
+        android:title="Quotes"/>
+
+</menu>
