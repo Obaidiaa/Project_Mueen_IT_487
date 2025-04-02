@@ -82,7 +82,11 @@ public class TimerFragment extends Fragment {
                 textViewCountdown.setText(formattedTime);
             }
         });
-
+        timerViewModel.phaseTextResId.observe(getViewLifecycleOwner(), resId -> {
+            if (textViewPhase != null && resId != null && getContext() != null) {
+                textViewPhase.setText(getString(resId)); // Get string using Fragment's context
+            }
+        });
         Observer<Object> dotUpdateObserver = ignored -> updateDotIndicators();
 
         // Observe Notification Events

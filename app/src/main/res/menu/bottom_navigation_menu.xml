@@ -4,21 +4,21 @@
     <item
         android:id="@+id/navigation_timer"
         android:icon="@drawable/ic_baseline_timer_24"
-        android:title="Timer"/>
+        android:title="@string/nav_timer"/>
 
     <item
         android:id="@+id/navigation_notes"
         android:icon="@drawable/ic_baseline_notes_24"
-        android:title="Notes"/>
+        android:title="@string/nav_notes"/>
 
     <item
         android:id="@+id/navigation_reminders"
         android:icon="@drawable/ic_baseline_notifications_active_24"
-        android:title="Reminders"/>
+        android:title="@string/nav_reminders"/>
 
     <item
         android:id="@+id/navigation_quotes"
         android:icon="@drawable/ic_baseline_format_quote_24"
-        android:title="Quotes"/>
+        android:title="@string/nav_quotes"/>
 
 </menu>

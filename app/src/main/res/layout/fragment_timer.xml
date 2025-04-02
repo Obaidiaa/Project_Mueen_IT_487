@@ -31,7 +31,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:text="Group: Alice, Bob, Charlie" />
+        tools:text="Group: Ahmed, Abdullah" />
 
 
     <TextView
@@ -43,7 +43,7 @@
         app:layout_constraintBottom_toTopOf="@+id/progress_circular"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        tools:text="Focus Time" />
+        tools:text="@string/timer_phase_focus" />
 
     <com.google.android.material.progressindicator.CircularProgressIndicator
         android:id="@+id/progress_circular"

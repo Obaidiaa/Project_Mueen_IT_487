@@ -1,0 +1,66 @@
+<resources>
+    <string name="app_name">مُعين</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+    <string name="timer_phase_focus">وقت التركيز</string>
+    <string name="timer_phase_short_break">استراحة قصيرة</string>
+    <string name="timer_phase_long_break">استراحة طويلة</string>
+    <string name="button_start">ابدأ</string>
+    <string name="button_pause">إيقاف مؤقت</string>
+    <string name="button_reset">إعادة ضبط</string>
+    <string name="button_skip">تخطِ</string>
+    <string name="crn_label">CRN: 22598</string>
+    <string name="group_members_label">ABDULRAHMAN ABDULLAH ALOBAIDI S210019932, \nALWALEED TALAL A ALMUTAIRI S210064728</string>
+    <!-- Notes -->
+    <string name="hint_enter_note">أدخل ملاحظتك هنا…</string>
+    <string name="button_save_note">حفظ الملاحظة</string>
+    <string name="label_no_notes">لا توجد ملاحظات بعد!</string>
+    <string name="desc_no_notes_icon">أيقونة تشير لعدم وجود ملاحظات</string>
+    <string name="toast_note_saved">تم حفظ الملاحظة!</string>
+    <string name="toast_enter_note">الرجاء إدخال ملاحظة!</string>
+    <string name="snackbar_note_deleted">تم حذف الملاحظة</string>
+    <string name="snackbar_undo">تراجع</string>
+    <string name="hint_edit_note">تعديل الملاحظة</string>
+    <string name="dialog_title_edit_note">تعديل الملاحظة</string>
+    <string name="dialog_save">حفظ</string>
+    <string name="dialog_cancel">إلغاء</string>
+    <string name="toast_note_updated">تم تحديث الملاحظة!</string>
+    <string name="toast_note_cannot_be_empty">لا يمكن أن تكون الملاحظة فارغة!</string>
+    <string name="error_loading_note">خطأ في تحميل بيانات الملاحظة.</string>
+    <string name="error_updating_note">خطأ في تحديث الملاحظة.</string>
+    <!-- Reminders -->
+    <string name="header_add_reminder">إضافة تذكير جديد</string>
+    <string name="hint_reminder_title_required">عنوان التذكير*</string>
+    <string name="hint_reminder_description_optional">الوصف (اختياري)</string>
+    <string name="hint_select_date_time_required">اختر التاريخ والوقت*</string>
+    <string name="button_set_reminder">ضبط التذكير</string>
+    <string name="header_upcoming_reminders">التذكيرات القادمة</string>
+    <string name="label_no_reminders">لا توجد تذكيرات قادمة!</string>
+    <string name="desc_no_reminders_icon">أيقونة تشير لعدم وجود تذكيرات</string>
+    <string name="toast_enter_reminder_title">الرجاء إدخال عنوان!</string>
+    <string name="toast_select_date_time">الرجاء اختيار التاريخ والوقت!</string>
+    <string name="toast_select_future_time">الرجاء اختيار وقت مستقبلي!</string>
+    <string name="toast_reminder_set">تم ضبط التذكير!</string>
+    <string name="snackbar_reminder_deleted">تم حذف التذكير</string>
+    <string name="error_saving_reminder">خطأ في حفظ التذكير.</string>
+    <string name="error_scheduling_alarm">خطأ في جدولة منبه التذكير.</string>
+    <string name="desc_add_reminder_fab">إضافة تذكير جديد</string>
+    <string name="dialog_title_add_reminder">إضافة تذكير</string>
+    <string name="dialog_add">إضافة</string>
+    <!-- Quotes -->
+    <string name="button_new_quote">اقتباس جديد</string>
+    <string name="default_quote_placeholder">جار تحميل الاقتباس…</string>
+    <!-- Notifications -->
+    <string name="channel_name_reminders">تذكيرات مُعين</string>
+    <string name="channel_description_reminders">إشعارات للتذكيرات الدراسية القادمة</string>
+    <string name="channel_name_timer">مؤقت بومودورو</string>
+    <string name="channel_description_timer">إشعارات لتغييرات مراحل مؤقت بومودورو</string>
+    <!-- General -->
+    <string name="nav_timer">المؤقت</string>
+    <string name="nav_notes">الملاحظات</string>
+    <string name="nav_reminders">التذكيرات</string>
+    <string name="nav_quotes">اقتباسات</string>
+
+    <!-- ... Translate ALL other strings ... -->
+</resources>

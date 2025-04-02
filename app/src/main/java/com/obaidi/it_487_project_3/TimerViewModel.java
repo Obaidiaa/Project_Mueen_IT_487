@@ -3,6 +3,8 @@ package com.obaidi.it_487_project_3;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
+
+import androidx.annotation.StringRes;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
@@ -19,12 +21,12 @@ public class TimerViewModel extends ViewModel {
         LONG_BREAK
     }
 
-    private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(1); // 1 min FOR TESTING
-    private static final long SHORT_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(10); // 10 sec FOR TESTING
-    private static final long LONG_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(20); // 20 sec FOR TESTING
-    // private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(25);
-    // private static final long SHORT_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(5);
-    // private static final long LONG_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(15);
+//    private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(1); // 1 min FOR TESTING
+//    private static final long SHORT_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(10); // 10 sec FOR TESTING
+//    private static final long LONG_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(20); // 20 sec FOR TESTING
+     private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(25);
+     private static final long SHORT_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(5);
+     private static final long LONG_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(15);
     private static final int LONG_BREAK_INTERVAL = 4;
 
     // LiveData for UI State
@@ -49,7 +51,8 @@ public class TimerViewModel extends ViewModel {
     private final MutableLiveData<String> _timeLeftFormatted = new MutableLiveData<>();
     public LiveData<String> timeLeftFormatted = _timeLeftFormatted;
 
-
+    private final MutableLiveData<Integer> _phaseTextResId = new MutableLiveData<>();
+    public LiveData<Integer> phaseTextResId = _phaseTextResId; // Expose Integer LiveData
     private CountDownTimer countDownTimer;
     private final MutableLiveData<Event<String>> _notificationEvent = new MutableLiveData<>();
     public LiveData<Event<String>> notificationEvent = _notificationEvent; // Fragment observes this
@@ -120,7 +123,7 @@ public class TimerViewModel extends ViewModel {
         long duration = getCurrentPhaseDuration();
         _totalTimeForPhase.setValue(duration);
         _timeLeftInMillis.setValue(duration);
-        updatePhaseText();
+        updatePhaseTextResId();
         updateFormattedTime(duration);
     }
 
@@ -131,7 +134,7 @@ public class TimerViewModel extends ViewModel {
     }
 
     private void handlePhaseCompletionInternal() {
-        PomodoroPhase previousPhase = _currentPhase.getValue(); // Get phase before changing
+        PomodoroPhase previousPhase = _currentPhase.getValue();
         PomodoroPhase current = _currentPhase.getValue();
         int count = _pomodoroCount.getValue() != null ? _pomodoroCount.getValue() : 0;
         PomodoroPhase nextPhase;
@@ -148,35 +151,33 @@ public class TimerViewModel extends ViewModel {
             nextPhase = PomodoroPhase.WORKING;
         }
 
-        _currentPhase.setValue(nextPhase); // Set the new phase *first*
+        _currentPhase.setValue(nextPhase);
+        postNotificationEvent(previousPhase, false); // Post notification based on phase change
 
-        // Post notification event *after* setting the new phase
-        postNotificationEvent(previousPhase, false); // Indicate normal completion
-
-        // Update rest of the state for the new phase
         long duration = getCurrentPhaseDuration();
         _totalTimeForPhase.setValue(duration);
         _timeLeftInMillis.setValue(duration);
-        updatePhaseText();
+        updatePhaseTextResId(); // Update the resource ID
         updateFormattedTime(duration);
     }
+
+    // Notification message generation needs context, ideally done in Fragment,
+    // but since it's simple text, generating here is acceptable for now.
+    // If it needed plural strings etc., it would *have* to move to Fragment.
     private void postNotificationEvent(PomodoroPhase completedPhase, boolean skipped) {
-        PomodoroPhase nextPhase = _currentPhase.getValue(); // Get the newly set phase
+        PomodoroPhase nextPhase = _currentPhase.getValue();
         if (completedPhase == null || nextPhase == null) return;
 
-        String message;
-        String completedPhaseStr = getPhaseName(completedPhase);
-        String nextPhaseStr = getPhaseName(nextPhase);
+        // Constructing the string here still - requires translation of individual parts if needed later
+        String message = getPhaseNameForNotification(completedPhase)
+                + (skipped ? " skipped! Starting " : " finished! Time for ")
+                + getPhaseNameForNotification(nextPhase) + ".";
 
-        if (skipped) {
-            message = completedPhaseStr + " skipped! Starting " + nextPhaseStr + ".";
-        } else {
-            message = completedPhaseStr + " finished! Time for " + nextPhaseStr + ".";
-        }
-        _notificationEvent.setValue(new Event<>(message)); // Trigger the event
+        _notificationEvent.setValue(new Event<>(message));
     }
 
-    private String getPhaseName(PomodoroPhase phase) {
+    // Helper for notification text (still hardcoded English parts, less ideal)
+    private String getPhaseNameForNotification(PomodoroPhase phase) {
         if (phase == null) return "";
         switch (phase) {
             case WORKING: return "Focus time";
@@ -196,15 +197,24 @@ public class TimerViewModel extends ViewModel {
         }
     }
 
-    private void updatePhaseText() {
+    private void updatePhaseTextResId() {
         PomodoroPhase phase = _currentPhase.getValue();
         if (phase == null) phase = PomodoroPhase.WORKING;
+        @StringRes int resId; // Use annotation for clarity
         switch (phase) {
-            case WORKING: _phaseText.setValue("Focus Time"); break;
-            case SHORT_BREAK: _phaseText.setValue("Short Break"); break;
-            case LONG_BREAK: _phaseText.setValue("Long Break"); break;
-            default: _phaseText.setValue("Focus Time"); break;
+            case WORKING:
+                resId = R.string.timer_phase_focus;
+                break;
+            case SHORT_BREAK:
+                resId = R.string.timer_phase_short_break;
+                break;
+            case LONG_BREAK:
+                resId = R.string.timer_phase_long_break;
+                break;
+            default:
+                resId = R.string.timer_phase_focus; // Default
         }
+        _phaseTextResId.setValue(resId); // Set the resource ID
     }
 
     private void updateFormattedTime(long millis) {
