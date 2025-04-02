@@ -91,11 +91,16 @@ public class TimerFragment extends Fragment {
 
         // Observe Notification Events
         timerViewModel.notificationEvent.observe(getViewLifecycleOwner(), event -> {
-                    String message = event.getContentIfNotHandled(); // Consume the event
-                    if (message != null) {
-                        // Check for permission before showing notification
-                        checkAndShowNotification(message);
-                    }
+            TimerViewModel.NotificationInfo info = event.getContentIfNotHandled(); // Consume the event
+            if (info != null && getContext() != null) {
+                // Construct the localized string HERE in the Fragment
+                String completedPhaseName = getString(info.completedPhaseResId);
+                String nextPhaseName = getString(info.nextPhaseResId);
+                String message = getString(info.formatResId, completedPhaseName, nextPhaseName); // Format the string
+
+                // Show notification with the constructed message
+                checkAndShowNotification(message);
+            }
         });
 
         timerViewModel.phaseText.observe(getViewLifecycleOwner(), phase -> {
@@ -279,7 +284,7 @@ public class TimerFragment extends Fragment {
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_baseline_timer_24) // Use a timer icon
-                .setContentTitle("IT487 Timer")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText(message)
                 .setPriority(NotificationCompat.PRIORITY_HIGH) // High priority for timers
                 .setAutoCancel(true); // Dismiss notification when tapped (optional)

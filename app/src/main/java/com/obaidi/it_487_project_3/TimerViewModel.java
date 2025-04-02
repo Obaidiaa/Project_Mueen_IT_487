@@ -54,8 +54,8 @@ public class TimerViewModel extends ViewModel {
     private final MutableLiveData<Integer> _phaseTextResId = new MutableLiveData<>();
     public LiveData<Integer> phaseTextResId = _phaseTextResId; // Expose Integer LiveData
     private CountDownTimer countDownTimer;
-    private final MutableLiveData<Event<String>> _notificationEvent = new MutableLiveData<>();
-    public LiveData<Event<String>> notificationEvent = _notificationEvent; // Fragment observes this
+    private final MutableLiveData<Event<NotificationInfo>> _notificationEvent = new MutableLiveData<>();
+    public LiveData<Event<NotificationInfo>> notificationEvent = _notificationEvent;
     public TimerViewModel() {
         // Initial setup when ViewModel is first created
         resetTimerInternal();
@@ -77,6 +77,19 @@ public class TimerViewModel extends ViewModel {
         skipPhaseInternal();
     }
 
+
+    // Helper class to hold notification info (Resource IDs)
+    public static class NotificationInfo {
+        @StringRes public final int formatResId;
+        @StringRes public final int completedPhaseResId;
+        @StringRes public final int nextPhaseResId;
+
+        public NotificationInfo(@StringRes int formatResId, @StringRes int completedPhaseResId, @StringRes int nextPhaseResId) {
+            this.formatResId = formatResId;
+            this.completedPhaseResId = completedPhaseResId;
+            this.nextPhaseResId = nextPhaseResId;
+        }
+    }
 
     private void startTimerInternal() {
         if (countDownTimer != null) {
@@ -164,28 +177,38 @@ public class TimerViewModel extends ViewModel {
     // Notification message generation needs context, ideally done in Fragment,
     // but since it's simple text, generating here is acceptable for now.
     // If it needed plural strings etc., it would *have* to move to Fragment.
+    @StringRes
+    private int getPhaseNameResId(PomodoroPhase phase) {
+        if (phase == null) return R.string.timer_phase_focus; // Default safety
+        switch (phase) {
+            case WORKING: return R.string.timer_phase_focus;
+            case SHORT_BREAK: return R.string.timer_phase_short_break;
+            case LONG_BREAK: return R.string.timer_phase_long_break;
+            default: return R.string.timer_phase_focus;
+        }
+    }
+
+    // Rewritten method posts NotificationInfo object
     private void postNotificationEvent(PomodoroPhase completedPhase, boolean skipped) {
         PomodoroPhase nextPhase = _currentPhase.getValue();
         if (completedPhase == null || nextPhase == null) return;
 
-        // Constructing the string here still - requires translation of individual parts if needed later
-        String message = getPhaseNameForNotification(completedPhase)
-                + (skipped ? " skipped! Starting " : " finished! Time for ")
-                + getPhaseNameForNotification(nextPhase) + ".";
+        // Get Resource IDs for the phase names
+        @StringRes int completedPhaseNameResId = getPhaseNameResId(completedPhase);
+        @StringRes int nextPhaseNameResId = getPhaseNameResId(nextPhase);
 
-        _notificationEvent.setValue(new Event<>(message));
+        // Determine which format string Resource ID to use
+        @StringRes int formatStringResId = skipped ?
+                R.string.notification_timer_phase_skipped :
+                R.string.notification_timer_phase_finished;
+
+        // Create the info object
+        NotificationInfo info = new NotificationInfo(formatStringResId, completedPhaseNameResId, nextPhaseNameResId);
+
+        // Post the event
+        _notificationEvent.setValue(new Event<>(info));
     }
 
-    // Helper for notification text (still hardcoded English parts, less ideal)
-    private String getPhaseNameForNotification(PomodoroPhase phase) {
-        if (phase == null) return "";
-        switch (phase) {
-            case WORKING: return "Focus time";
-            case SHORT_BREAK: return "Short break";
-            case LONG_BREAK: return "Long break";
-            default: return "";
-        }
-    }
     private long getCurrentPhaseDuration() {
         PomodoroPhase phase = _currentPhase.getValue();
         if (phase == null) phase = PomodoroPhase.WORKING; // Default

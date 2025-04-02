@@ -56,6 +56,8 @@
 <string name="channel_description_reminders">Notifications for upcoming study reminders</string>
 <string name="channel_name_timer">Pomodoro Timer</string>
 <string name="channel_description_timer">Notifications for Pomodoro timer phase changes</string>
+<string name="notification_timer_phase_finished">"%1$s finished! Time for %2$s."</string>
+<string name="notification_timer_phase_skipped">"%1$s skipped! Starting %2$s."</string>
 <!-- General -->
 <string name="nav_timer">Timer</string>
 <string name="nav_notes">Notes</string>

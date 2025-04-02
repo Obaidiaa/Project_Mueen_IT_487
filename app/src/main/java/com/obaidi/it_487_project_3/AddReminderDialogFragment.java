@@ -99,7 +99,6 @@ public class AddReminderDialogFragment extends DialogFragment {
         // Validation
         if (title.isEmpty()) {
             Toast.makeText(getContext(), R.string.toast_enter_reminder_title, Toast.LENGTH_SHORT).show();
-            // How to prevent closing? More complex, requires overriding button listener
             return;
         }
         if (dateText.isEmpty()) {

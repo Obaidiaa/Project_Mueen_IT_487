@@ -12,12 +12,11 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 
-import java.util.ArrayList; // Import ArrayList
-import java.util.Arrays; // Import Arrays
-import java.util.HashSet; // Import HashSet
-import java.util.List;
-import java.util.Random;
-import java.util.Set; // Import Set
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+
+import java.util.Set;
 
 public class QuotesViewModel extends ViewModel {
 
@@ -32,8 +31,7 @@ public class QuotesViewModel extends ViewModel {
     // Add the exact author names you want to exclude here
     private static final Set<String> EXCLUDED_AUTHORS = new HashSet<>(Arrays.asList(
             "صدام حسين"
-            // Add more authors exactly as they appear in the data
-    ));
+     ));
     // -----------------------------
 
     private final MutableLiveData<String> _currentQuote = new MutableLiveData<>();

@@ -22,18 +22,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main); // Replace with your actual layout
+        setContentView(R.layout.activity_main);
 
         // --- Create Notification Channels ---
         createNotificationChannels();
         // --- End Channel Creation ---
 
-        bottomNavigationView = findViewById(R.id.bottomNavigationView); // Replace if your ID is different
+        bottomNavigationView = findViewById(R.id.bottomNavigationView);
 
         // Load default fragment (make sure this happens AFTER channel creation)
         if (savedInstanceState == null) { // Only load default on first creation
             getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, new TimerFragment()) // Replace with your fragment container ID
+                    .replace(R.id.fragment_container, new TimerFragment())
                     .commit();
         }
 
@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
 
                 if (selectedFragment != null) {
                     getSupportFragmentManager().beginTransaction()
-                            .replace(R.id.fragment_container, selectedFragment) // Replace with your fragment container ID
+                            .replace(R.id.fragment_container, selectedFragment)
                             .commit();
                     return true;
                 }

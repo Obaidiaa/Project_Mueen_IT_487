@@ -56,6 +56,8 @@
     <string name="channel_description_reminders">إشعارات للتذكيرات الدراسية القادمة</string>
     <string name="channel_name_timer">مؤقت بومودورو</string>
     <string name="channel_description_timer">إشعارات لتغييرات مراحل مؤقت بومودورو</string>
+    <string name="notification_timer_phase_finished">"انتهى %1$s! حان وقت %2$s."</string>
+    <string name="notification_timer_phase_skipped">"تم تخطي %1$s! بدء %2$s."</string>
     <!-- General -->
     <string name="nav_timer">المؤقت</string>
     <string name="nav_notes">الملاحظات</string>

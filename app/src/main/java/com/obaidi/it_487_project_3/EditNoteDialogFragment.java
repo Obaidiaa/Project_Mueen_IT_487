@@ -24,7 +24,6 @@ public class EditNoteDialogFragment extends DialogFragment {
     private TextInputEditText editTextNote;
     private NotesViewModel notesViewModel;
     private int noteId;
-    private long noteTimestamp; // Store original timestamp if needed for comparison later
 
     // Factory method to create instance with arguments
     public static EditNoteDialogFragment newInstance(Note note) {
@@ -53,7 +52,8 @@ public class EditNoteDialogFragment extends DialogFragment {
         if (getArguments() != null) {
             noteId = getArguments().getInt(ARG_NOTE_ID, -1); // Use -1 as default invalid ID
             String currentText = getArguments().getString(ARG_NOTE_TEXT, "");
-            noteTimestamp = getArguments().getLong(ARG_NOTE_TIMESTAMP, 0);
+            // Store original timestamp if needed for comparison later
+            long noteTimestamp = getArguments().getLong(ARG_NOTE_TIMESTAMP, 0);
             editTextNote.setText(currentText);
             editTextNote.setSelection(currentText.length()); // Move cursor to end
         } else {

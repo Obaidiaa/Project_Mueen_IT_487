@@ -9,7 +9,7 @@ import androidx.room.RoomDatabase;
 @Database(entities = {Note.class, Reminder.class}, version = 2, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
     public abstract NoteDao noteDao();
-    public abstract ReminderDao reminderDao(); // Add ReminderDao getter
+    public abstract ReminderDao reminderDao();
 
     private static volatile AppDatabase INSTANCE;
 
@@ -18,7 +18,7 @@ public abstract class AppDatabase extends RoomDatabase {
             synchronized (AppDatabase.class) {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
-                                    AppDatabase.class, "IT487_database") // Renamed DB for clarity
+                                    AppDatabase.class, "IT487_database")
                             // Add migrations here for production
                             .fallbackToDestructiveMigration() // Use only during development!
                             .build();
