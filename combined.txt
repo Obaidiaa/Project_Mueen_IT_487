@@ -1,0 +1,3142 @@
+==== app\src\main\AndroidManifest.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.IT_487_Project_3"
+        tools:targetApi="31">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <receiver android:name=".ReminderBroadcast"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.obaidi.IT_487_Project_3.REMINDER_ACTION"/>
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
+
+
+==== app\src\main\java\com\obaidi\it_487_project_3\AddReminderDialogFragment.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.AlarmManager;
+import android.app.DatePickerDialog;
+import android.app.Dialog;
+import android.app.TimePickerDialog;
+import android.content.Context;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.DatePicker;
+import android.widget.TimePicker;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.fragment.app.DialogFragment;
+import androidx.lifecycle.ViewModelProvider;
+import com.google.android.material.textfield.TextInputEditText;
+import java.text.DateFormat;
+import java.util.Calendar;
+
+public class AddReminderDialogFragment extends DialogFragment {
+
+    private TextInputEditText editTextTitle;
+    private TextInputEditText editTextDescription;
+    private TextInputEditText editTextDate;
+    private ReminderViewModel reminderViewModel;
+    private Calendar selectedDateTime;
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireActivity());
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_add_reminder, null);
+
+        editTextTitle = dialogView.findViewById(R.id.dialog_edit_text_reminder_title);
+        editTextDescription = dialogView.findViewById(R.id.dialog_edit_text_reminder_description);
+        editTextDate = dialogView.findViewById(R.id.dialog_edit_text_reminder_date);
+
+        selectedDateTime = Calendar.getInstance(); // Initialize calendar
+
+        // Get ViewModel scoped to the parent Fragment/Activity
+        reminderViewModel = new ViewModelProvider(requireActivity()).get(ReminderViewModel.class);
+
+        editTextDate.setOnClickListener(v -> showDateTimePicker());
+
+        builder.setView(dialogView)
+                .setTitle(R.string.dialog_title_add_reminder) // Add string resource
+                .setPositiveButton(R.string.dialog_add, (dialog, id) -> {
+                    saveReminder();
+                    // Dialog dismisses automatically
+                })
+                .setNegativeButton(R.string.dialog_cancel, (dialog, id) -> {
+                    AddReminderDialogFragment.this.getDialog().cancel();
+                });
+
+        return builder.create();
+    }
+
+    private void showDateTimePicker() {
+        final Calendar currentDate = Calendar.getInstance();
+        // Prevent selecting past dates
+        DatePickerDialog datePickerDialog = new DatePickerDialog(requireContext(),
+                (view, year, month, dayOfMonth) -> {
+                    selectedDateTime.set(year, month, dayOfMonth);
+                    showTimePicker(); // Chain the time picker
+                }, currentDate.get(Calendar.YEAR), currentDate.get(Calendar.MONTH), currentDate.get(Calendar.DAY_OF_MONTH));
+
+        datePickerDialog.getDatePicker().setMinDate(System.currentTimeMillis() - 1000); // Set min date to now
+        datePickerDialog.show();
+    }
+
+    private void showTimePicker() {
+        final Calendar currentTime = Calendar.getInstance();
+        new TimePickerDialog(requireContext(),
+                (view, hourOfDay, minute) -> {
+                    selectedDateTime.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    selectedDateTime.set(Calendar.MINUTE, minute);
+                    selectedDateTime.set(Calendar.SECOND, 0);
+                    selectedDateTime.set(Calendar.MILLISECOND, 0);
+                    updateReminderDateTextField();
+                }, currentTime.get(Calendar.HOUR_OF_DAY), currentTime.get(Calendar.MINUTE), false).show();
+    }
+
+    private void updateReminderDateTextField() {
+        String dateTimeString = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                .format(selectedDateTime.getTime());
+        editTextDate.setText(dateTimeString);
+    }
+
+    private void saveReminder() {
+        String title = editTextTitle.getText().toString().trim();
+        String description = editTextDescription.getText().toString().trim();
+        String dateText = editTextDate.getText().toString();
+        long triggerTime = selectedDateTime.getTimeInMillis();
+
+        // Validation
+        if (title.isEmpty()) {
+            Toast.makeText(getContext(), R.string.toast_enter_reminder_title, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (dateText.isEmpty()) {
+            Toast.makeText(getContext(), R.string.toast_select_date_time, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (triggerTime <= System.currentTimeMillis()) {
+            Toast.makeText(getContext(), R.string.toast_select_future_time, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Reminder newReminder = new Reminder(title, description, triggerTime);
+        long reminderId = reminderViewModel.insert(newReminder);
+
+        if (reminderId != -1) {
+            RemindersFragment.scheduleAlarm(getContext(), (int) reminderId, title, description, triggerTime); // Call static method
+            Toast.makeText(getContext(), R.string.toast_reminder_set, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(getContext(), R.string.error_saving_reminder, Toast.LENGTH_SHORT).show();
+        }
+    }
+}
+
+
+==== app\src\main\java\com\obaidi\it_487_project_3\AppDatabase.java ====
+package com.obaidi.it_487_project_3;
+
+import android.content.Context;
+import androidx.room.Database;
+import androidx.room.Room;
+import androidx.room.RoomDatabase;
+
+// Increment version number if schema changes
+@Database(entities = {Note.class, Reminder.class}, version = 2, exportSchema = false)
+public abstract class AppDatabase extends RoomDatabase {
+    public abstract NoteDao noteDao();
+    public abstract ReminderDao reminderDao();
+
+    private static volatile AppDatabase INSTANCE;
+
+    public static AppDatabase getDatabase(final Context context) {
+        if (INSTANCE == null) {
+            synchronized (AppDatabase.class) {
+                if (INSTANCE == null) {
+                    INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
+                                    AppDatabase.class, "IT487_database")
+                            // Add migrations here for production
+                            .fallbackToDestructiveMigration() // Use only during development!
+                            .build();
+                }
+            }
+        }
+        return INSTANCE;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\EditNoteDialogFragment.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.Dialog;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.fragment.app.DialogFragment;
+import androidx.lifecycle.ViewModelProvider;
+
+import com.google.android.material.textfield.TextInputEditText;
+
+public class EditNoteDialogFragment extends DialogFragment {
+
+    private static final String ARG_NOTE_ID = "note_id";
+    private static final String ARG_NOTE_TEXT = "note_text";
+    private static final String ARG_NOTE_TIMESTAMP = "note_timestamp";
+
+    private TextInputEditText editTextNote;
+    private NotesViewModel notesViewModel;
+    private int noteId;
+
+    // Factory method to create instance with arguments
+    public static EditNoteDialogFragment newInstance(Note note) {
+        EditNoteDialogFragment fragment = new EditNoteDialogFragment();
+        Bundle args = new Bundle();
+        args.putInt(ARG_NOTE_ID, note.getId());
+        args.putString(ARG_NOTE_TEXT, note.getNoteText());
+        args.putLong(ARG_NOTE_TIMESTAMP, note.getTimestamp());
+        fragment.setArguments(args);
+        return fragment;
+    }
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireActivity());
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_edit_note, null);
+
+        editTextNote = dialogView.findViewById(R.id.edit_note_edit_text);
+
+        // Get ViewModel (scoped to the parent Fragment/Activity)
+        notesViewModel = new ViewModelProvider(requireActivity()).get(NotesViewModel.class);
+
+        // Retrieve arguments
+        if (getArguments() != null) {
+            noteId = getArguments().getInt(ARG_NOTE_ID, -1); // Use -1 as default invalid ID
+            String currentText = getArguments().getString(ARG_NOTE_TEXT, "");
+            // Store original timestamp if needed for comparison later
+            long noteTimestamp = getArguments().getLong(ARG_NOTE_TIMESTAMP, 0);
+            editTextNote.setText(currentText);
+            editTextNote.setSelection(currentText.length()); // Move cursor to end
+        } else {
+            // Handle error: arguments not provided
+            Toast.makeText(getContext(), R.string.error_loading_note, Toast.LENGTH_SHORT).show();
+            dismiss();
+        }
+
+        builder.setView(dialogView)
+                .setTitle(R.string.dialog_title_edit_note)
+                .setPositiveButton(R.string.dialog_save, (dialog, id) -> {
+                    // Save button clicked
+                    String updatedText = editTextNote.getText().toString().trim();
+                    if (noteId != -1 && !TextUtils.isEmpty(updatedText)) {
+                        // Create a Note object for update
+                        // It's okay to create a new one, Room uses the PrimaryKey (id)
+                        Note updatedNote = new Note(updatedText);
+                        updatedNote.setId(noteId);
+                        // Timestamp is updated automatically in the Repository's update method
+                        notesViewModel.update(updatedNote);
+                        Toast.makeText(getContext(), R.string.toast_note_updated, Toast.LENGTH_SHORT).show();
+                    } else if (TextUtils.isEmpty(updatedText)){
+                        Toast.makeText(getContext(), R.string.toast_note_cannot_be_empty, Toast.LENGTH_SHORT).show();
+                        // Optionally prevent dialog from closing if empty
+                    } else {
+                        Toast.makeText(getContext(), R.string.error_updating_note, Toast.LENGTH_SHORT).show();
+                    }
+                    // Dialog dismisses automatically on positive button click
+                })
+                .setNegativeButton(R.string.dialog_cancel, (dialog, id) -> {
+                    // Cancel button clicked - dismisses automatically
+                    EditNoteDialogFragment.this.getDialog().cancel();
+                });
+
+        return builder.create();
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\Event.java ====
+package com.obaidi.it_487_project_3;
+
+public class Event<T> {
+
+    private boolean hasBeenHandled = false;
+    private final T content; // Actual event content
+
+    public Event(T content) {
+        this.content = content;
+    }
+
+    /**
+     * Returns the content and prevents its use again.
+     */
+    public T getContentIfNotHandled() {
+        if (hasBeenHandled) {
+            return null;
+        } else {
+            hasBeenHandled = true;
+            return content;
+        }
+    }
+
+    /**
+     * Returns the content, even if it's already been handled.
+     */
+    public T peekContent() {
+        return content;
+    }
+
+    public boolean hasBeenHandled() {
+        return hasBeenHandled;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\MainActivity.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.os.Build; // Import Build
+import android.os.Bundle;
+import android.view.MenuItem;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
+
+public class MainActivity extends AppCompatActivity {
+
+    private BottomNavigationView bottomNavigationView;
+
+    // Define Channel IDs consistently
+    public static final String REMINDER_CHANNEL_ID = "notifyIT487Reminder"; // Make sure this matches EXACTLY
+    public static final String TIMER_CHANNEL_ID = "notifyIT487Timer"; // Keep the timer one too
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // --- Create Notification Channels ---
+        createNotificationChannels();
+        // --- End Channel Creation ---
+
+        bottomNavigationView = findViewById(R.id.bottomNavigationView);
+
+        // Load default fragment (make sure this happens AFTER channel creation)
+        if (savedInstanceState == null) { // Only load default on first creation
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, new TimerFragment())
+                    .commit();
+        }
+
+
+        bottomNavigationView.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                Fragment selectedFragment = null;
+                int itemId = item.getItemId();
+
+                // Use your actual menu item IDs here
+                if (itemId == R.id.navigation_timer) {
+                    selectedFragment = new TimerFragment();
+                } else if (itemId == R.id.navigation_notes) {
+                    selectedFragment = new NotesFragment();
+                } else if (itemId == R.id.navigation_reminders) {
+                    selectedFragment = new RemindersFragment();
+                } else if (itemId == R.id.navigation_quotes) {
+                    selectedFragment = new QuotesFragment();
+                }
+                // ... add other fragments if needed
+
+                if (selectedFragment != null) {
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.fragment_container, selectedFragment)
+                            .commit();
+                    return true;
+                }
+                return false;
+            }
+        });
+    }
+
+    private void createNotificationChannels() {
+        // Channels are only needed on API 26+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // --- Reminder Channel ---
+            CharSequence reminderChannelName = getString(R.string.channel_name_reminders); // Use string resource
+            String reminderChannelDesc = getString(R.string.channel_description_reminders); // Use string resource
+            int reminderImportance = NotificationManager.IMPORTANCE_HIGH; // Reminders should be high importance
+            NotificationChannel reminderChannel = new NotificationChannel(REMINDER_CHANNEL_ID, reminderChannelName, reminderImportance);
+            reminderChannel.setDescription(reminderChannelDesc);
+
+            // --- Timer Channel --- (If you haven't created it elsewhere)
+            CharSequence timerChannelName = getString(R.string.channel_name_timer); // Use string resource
+            String timerChannelDesc = getString(R.string.channel_description_timer); // Use string resource
+            int timerImportance = NotificationManager.IMPORTANCE_HIGH; // Timer alerts are also important
+            NotificationChannel timerChannel = new NotificationChannel(TIMER_CHANNEL_ID, timerChannelName, timerImportance);
+            timerChannel.setDescription(timerChannelDesc);
+
+
+            // --- Register the channels with the system ---
+            // Don't create a new NotificationManager instance every time. Get the system service.
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(reminderChannel);
+                notificationManager.createNotificationChannel(timerChannel); // Create timer channel too
+            }
+        }
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\Note.java ====
+package com.obaidi.it_487_project_3;
+
+import androidx.room.ColumnInfo;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
+@Entity(tableName = "notes")
+public class Note {
+    @PrimaryKey(autoGenerate = true)
+    public int id;
+
+    @ColumnInfo(name = "note_text")
+    public String noteText;
+
+    @ColumnInfo(name = "timestamp") // New column for timestamp
+    public long timestamp;         // Store as milliseconds
+
+    // Update constructor to initialize timestamp
+    public Note(String noteText) {
+        this.noteText = noteText;
+        this.timestamp = System.currentTimeMillis(); // Set timestamp on creation
+    }
+
+    // Getters and Setters (keep existing ones, add for timestamp)
+    public String getNoteText() { return noteText;}
+    public int getId() { return id;}
+    public long getTimestamp() { return timestamp; } // Getter for timestamp
+
+    public void setNoteText(String noteText) { this.noteText = noteText;}
+    public void setId(int id) {this.id = id;}
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; } // Setter for timestamp
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\NoteDao.java ====
+package com.obaidi.it_487_project_3;
+
+import androidx.lifecycle.LiveData;
+import androidx.room.Dao;
+import androidx.room.Delete; // Import Delete
+import androidx.room.Insert;
+import androidx.room.OnConflictStrategy;
+import androidx.room.Query;
+import androidx.room.Update; // Import Update
+
+import java.util.List;
+
+
+@Dao
+public interface NoteDao {
+
+    @Query("SELECT * FROM notes ORDER BY timestamp DESC") // Order by newest first
+    LiveData<List<Note>> getAllNotes();
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    void insert(Note note);
+
+    @Delete // Add the Delete annotation
+    void delete(Note note); // Method to delete a specific note
+
+    @Query("DELETE FROM notes")
+    void deleteAll();
+
+    @Update // Add the Update annotation
+    void update(Note note); // Method to update an existing note
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\NoteListAdapter.java ====
+package com.obaidi.it_487_project_3;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
+import androidx.recyclerview.widget.RecyclerView;
+import java.text.DateFormat;
+import java.util.Date;
+public class NoteListAdapter extends ListAdapter<Note, NoteListAdapter.NoteViewHolder> {
+
+    private OnItemClickListener listener; // Listener instance
+
+    // Constructor remains the same
+    public NoteListAdapter(@NonNull DiffUtil.ItemCallback<Note> diffCallback) {
+        super(diffCallback);
+    }
+
+    @NonNull
+    @Override
+    public NoteViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View itemView = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.recyclerview_item, parent, false);
+        return new NoteViewHolder(itemView);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
+        Note current = getItem(position);
+        holder.bind(current);
+    }
+
+    public Note getNoteAt(int position) {
+        return getItem(position);
+    }
+
+    // --- Click Listener Setup ---
+    public interface OnItemClickListener {
+        void onItemClick(Note note);
+    }
+
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        this.listener = listener;
+    }
+    // --- End Click Listener Setup ---
+
+
+    class NoteViewHolder extends RecyclerView.ViewHolder { // Make inner class non-static
+        private final TextView noteItemView;
+        private final TextView timestampView;
+
+        private NoteViewHolder(View itemView) {
+            super(itemView);
+            noteItemView = itemView.findViewById(R.id.textViewNoteText);
+            timestampView = itemView.findViewById(R.id.textViewTimestamp);
+
+            // Set the click listener on the item view itself
+            itemView.setOnClickListener(v -> {
+                int position = getAdapterPosition();
+                // Check if listener exists and position is valid
+                if (listener != null && position != RecyclerView.NO_POSITION) {
+                    listener.onItemClick(getItem(position));
+                }
+            });
+        }
+
+        public void bind(Note note) {
+            noteItemView.setText(note.getNoteText());
+            String formattedDate = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                    .format(new Date(note.getTimestamp()));
+            timestampView.setText(formattedDate);
+        }
+    }
+
+    // DiffUtil remains the same
+    static class NoteDiff extends DiffUtil.ItemCallback<Note> {
+        @Override
+        public boolean areItemsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.getId() == newItem.getId();
+        }
+
+        @Override
+        public boolean areContentsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.getNoteText().equals(newItem.getNoteText()) &&
+                    oldItem.getTimestamp() == newItem.getTimestamp();
+        }
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\NoteRepository.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.Application;
+import androidx.lifecycle.LiveData;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class NoteRepository {
+
+    private NoteDao noteDao;
+    private LiveData<List<Note>> allNotes;
+    private ExecutorService executorService;
+
+    NoteRepository(Application application) {
+        AppDatabase db = AppDatabase.getDatabase(application);
+        noteDao = db.noteDao();
+        allNotes = noteDao.getAllNotes();
+        // Use a single thread executor for database writes/deletes to ensure order if needed
+        executorService = Executors.newSingleThreadExecutor();
+    }
+
+    LiveData<List<Note>> getAllNotes() {
+        return allNotes;
+    }
+
+    void insert(Note note) {
+        // Automatically sets timestamp in Note constructor now
+        executorService.execute(() -> noteDao.insert(note));
+    }
+
+    // Add delete method
+    void delete(Note note) {
+        executorService.execute(() -> noteDao.delete(note));
+    }
+
+    void deleteAll() {
+        executorService.execute(noteDao::deleteAll); // Use method reference
+    }
+
+    // Add update method
+    void update(Note note) {
+        // Update the timestamp when the note is updated
+        note.setTimestamp(System.currentTimeMillis());
+        executorService.execute(() -> noteDao.update(note));
+    }
+
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\NotesFragment.java ====
+package com.obaidi.it_487_project_3;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Observer;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.textfield.TextInputEditText;
+
+public class NotesFragment extends Fragment implements NoteListAdapter.OnItemClickListener {
+
+    private NotesViewModel notesViewModel;
+    private TextInputEditText editTextNotes;
+    private MaterialButton buttonSaveNotes;
+    private RecyclerView recyclerView;
+    private NoteListAdapter adapter;
+    private LinearLayout emptyView; // Reference to empty state layout
+
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_notes, container, false);
+
+        editTextNotes = view.findViewById(R.id.edit_text_notes);
+        buttonSaveNotes = view.findViewById(R.id.button_save_notes);
+        recyclerView = view.findViewById(R.id.recyclerview);
+        emptyView = view.findViewById(R.id.empty_view); // Get empty view reference
+
+        adapter = new NoteListAdapter(new NoteListAdapter.NoteDiff());
+        adapter.setOnItemClickListener(this); // Set the fragment as the listener
+        recyclerView.setAdapter(adapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+
+
+        // ViewModel Setup
+        notesViewModel = new ViewModelProvider(this).get(NotesViewModel.class);
+
+        // Observe Notes List
+        notesViewModel.getAllNotes().observe(getViewLifecycleOwner(), notes -> {
+            // Update the cached copy of the notes in the adapter.
+            adapter.submitList(notes);
+            // Show/Hide Empty View
+            if (notes == null || notes.isEmpty()) {
+                recyclerView.setVisibility(View.GONE);
+                emptyView.setVisibility(View.VISIBLE);
+            } else {
+                recyclerView.setVisibility(View.VISIBLE);
+                emptyView.setVisibility(View.GONE);
+            }
+        });
+
+        // Save Button Logic
+        buttonSaveNotes.setOnClickListener(v -> {
+            String noteText = editTextNotes.getText().toString().trim(); // Trim whitespace
+            if (!noteText.isEmpty()) {
+                Note note = new Note(noteText); // Timestamp added in constructor
+                notesViewModel.insert(note);
+                editTextNotes.setText(""); // Clear the input
+                Toast.makeText(getContext(), R.string.toast_note_saved, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getContext(), R.string.toast_enter_note, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // --- Swipe-to-Delete Implementation ---
+        new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0,
+                ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) { // Enable left and right swipe
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+                return false; // We don't want move functionality
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                // 1. Get the note to delete
+                int position = viewHolder.getAdapterPosition();
+                Note noteToDelete = adapter.getNoteAt(position);
+
+                // 2. Delete the note via ViewModel
+                notesViewModel.delete(noteToDelete);
+
+                // 3. Show Snackbar with Undo option
+                Snackbar.make(recyclerView, R.string.snackbar_note_deleted, Snackbar.LENGTH_LONG)
+                        .setAction(R.string.snackbar_undo, v -> {
+                            // Undo action: Re-insert the note
+                            notesViewModel.insert(noteToDelete);
+                        })
+                        .show();
+            }
+        }).attachToRecyclerView(recyclerView); // Attach the helper to RecyclerView
+        // --- End Swipe-to-Delete ---
+
+        return view;
+    }
+
+    // --- Implementation of OnItemClickListener ---
+    @Override
+    public void onItemClick(Note note) {
+        // Create and show the EditNoteDialogFragment
+        EditNoteDialogFragment dialogFragment = EditNoteDialogFragment.newInstance(note);
+        // Use getChildFragmentManager() if showing from within a Fragment is preferred
+        // Use getParentFragmentManager() or requireActivity().getSupportFragmentManager() otherwise
+        dialogFragment.show(getParentFragmentManager(), "EditNoteDialog");
+    }
+}
+
+
+==== app\src\main\java\com\obaidi\it_487_project_3\NotesViewModel.java ====
+package com.obaidi.it_487_project_3;
+
+
+import android.app.Application;
+import androidx.lifecycle.AndroidViewModel;
+import androidx.lifecycle.LiveData;
+import java.util.List;
+
+public class NotesViewModel extends AndroidViewModel {
+
+    private NoteRepository repository;
+    private final LiveData<List<Note>> allNotes;
+
+    public NotesViewModel(Application application) {
+        super(application);
+        repository = new NoteRepository(application);
+        allNotes = repository.getAllNotes();
+    }
+
+    public LiveData<List<Note>> getAllNotes() {
+        return allNotes;
+    }
+
+    public void insert(Note note) {
+        repository.insert(note);
+    }
+
+    // Add delete method
+    public void delete(Note note) {
+        repository.delete(note);
+    }
+
+    public void deleteAll() {
+        repository.deleteAll();
+    }
+
+    // Add update method
+    public void update(Note note) {
+        repository.update(note);
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuoteApiResponse.java ====
+package com.obaidi.it_487_project_3;
+
+import com.google.gson.annotations.SerializedName;
+import java.util.List;
+
+public class QuoteApiResponse {
+    @SerializedName("rows")
+    private List<QuoteRow> rows;
+
+    public List<QuoteRow> getRows() {
+        return rows;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuoteApiService.java ====
+package com.obaidi.it_487_project_3;
+
+import retrofit2.Call;
+import retrofit2.http.GET;
+import retrofit2.http.Query;
+
+public interface QuoteApiService {
+
+    // Base URL: https://datasets-server.huggingface.co/
+    // Endpoint: rows
+    @GET("rows")
+    Call<QuoteApiResponse> getArabicQuotes(
+            @Query("dataset") String dataset, // "HeshamHaroon/arabic-quotes"
+            @Query("config") String config,   // "default"
+            @Query("split") String split,     // "train"
+            @Query("offset") int offset,      // e.g., 0
+            @Query("length") int length       // e.g., 100
+    );
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuoteData.java ====
+package com.obaidi.it_487_project_3;
+
+import com.google.gson.annotations.SerializedName;
+// import java.util.List; // Uncomment if you want to use tags later
+
+public class QuoteData {
+    @SerializedName("quote")
+    private String quoteText;
+
+    @SerializedName("author") // Add author field mapping
+    private String author;
+
+    // Uncomment if you want to process tags
+    // @SerializedName("tags")
+    // private List<String> tags;
+
+    public String getQuoteText() {
+        // Optional: Trim extra whitespace often found in this dataset
+        return quoteText != null ? quoteText.trim() : null;
+    }
+
+    public String getAuthor() { // Add getter for author
+        return author != null ? author.trim() : "غير معروف"; // Provide default if null
+    }
+
+    // public List<String> getTags() { return tags; } // Uncomment if using tags
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuoteRow.java ====
+package com.obaidi.it_487_project_3;
+
+import com.google.gson.annotations.SerializedName;
+
+public class QuoteRow {
+    @SerializedName("row")
+    private QuoteData quoteData;
+
+    public QuoteData getQuoteData() {
+        return quoteData;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuotesFragment.java ====
+package com.obaidi.it_487_project_3;
+
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import com.google.android.material.button.MaterialButton;
+
+public class QuotesFragment extends Fragment {
+
+    private TextView textViewQuote;
+    private TextView textViewAuthor; // Add TextView for author
+    private ProgressBar progressBar;
+    private MaterialButton refreshButton;
+    private QuotesViewModel quotesViewModel;
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_quotes, container, false);
+
+        textViewQuote = view.findViewById(R.id.text_view_quote);
+        textViewAuthor = view.findViewById(R.id.text_view_author); // Find author TextView
+        progressBar = view.findViewById(R.id.progress_bar_quote);
+        refreshButton = view.findViewById(R.id.button_refresh_quote);
+
+        quotesViewModel = new ViewModelProvider(this).get(QuotesViewModel.class);
+
+        // Observe LiveData
+        quotesViewModel.currentQuote.observe(getViewLifecycleOwner(), quote -> {
+            textViewQuote.setText(quote != null ? quote : getString(R.string.default_quote_placeholder));
+            textViewQuote.setVisibility(View.VISIBLE);
+        });
+
+        // Observe Author LiveData
+        quotesViewModel.currentAuthor.observe(getViewLifecycleOwner(), author -> {
+            textViewAuthor.setText(author != null ? author : ""); // Set author text
+            // Show/hide based on whether author is empty, only if not loading
+            if (!Boolean.TRUE.equals(quotesViewModel.isLoading.getValue())) {
+                textViewAuthor.setVisibility(author != null && !author.isEmpty() ? View.VISIBLE : View.GONE);
+            }
+        });
+
+        quotesViewModel.isLoading.observe(getViewLifecycleOwner(), isLoading -> {
+            if (isLoading) {
+                progressBar.setVisibility(View.VISIBLE);
+                textViewQuote.setVisibility(View.INVISIBLE);
+                textViewAuthor.setVisibility(View.INVISIBLE); // Hide author while loading
+                refreshButton.setEnabled(false);
+            } else {
+                progressBar.setVisibility(View.GONE);
+                textViewQuote.setVisibility(View.VISIBLE);
+                // Author visibility is handled by its own observer now based on content
+                String currentAuthor = quotesViewModel.currentAuthor.getValue();
+                textViewAuthor.setVisibility(currentAuthor != null && !currentAuthor.isEmpty() ? View.VISIBLE : View.GONE);
+                refreshButton.setEnabled(true);
+            }
+        });
+
+        quotesViewModel.errorMessage.observe(getViewLifecycleOwner(), error -> {
+            if (error != null && !error.isEmpty()) {
+                Toast.makeText(getContext(), error, Toast.LENGTH_LONG).show();
+                progressBar.setVisibility(View.GONE);
+                refreshButton.setEnabled(true);
+                textViewQuote.setVisibility(View.VISIBLE); // Show default error quote
+                textViewAuthor.setVisibility(View.GONE);   // Hide author on error
+            }
+        });
+
+        refreshButton.setOnClickListener(v -> quotesViewModel.fetchNewQuote());
+
+        return view;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\QuotesViewModel.java ====
+package com.obaidi.it_487_project_3;
+
+import android.util.Log;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.ViewModel;
+
+import java.util.List;
+import java.util.Random;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+
+import java.util.Set;
+
+public class QuotesViewModel extends ViewModel {
+
+    private static final String TAG = "QuotesViewModel"; // For logging
+    private static final String DATASET = "HeshamHaroon/arabic-quotes";
+    private static final String CONFIG = "default";
+    private static final String SPLIT = "train";
+    private static final int FETCH_LENGTH = 100; // How many quotes to fetch at once
+
+
+    // --- Author Exclusion List ---
+    // Add the exact author names you want to exclude here
+    private static final Set<String> EXCLUDED_AUTHORS = new HashSet<>(Arrays.asList(
+            "صدام حسين"
+     ));
+    // -----------------------------
+
+    private final MutableLiveData<String> _currentQuote = new MutableLiveData<>();
+    public LiveData<String> currentQuote = _currentQuote;
+
+    private final MutableLiveData<String> _currentAuthor = new MutableLiveData<>(); // LiveData for Author
+    public LiveData<String> currentAuthor = _currentAuthor; // Public LiveData
+
+    private final MutableLiveData<Boolean> _isLoading = new MutableLiveData<>(false);
+    public LiveData<Boolean> isLoading = _isLoading;
+
+    private final MutableLiveData<String> _errorMessage = new MutableLiveData<>();
+    public LiveData<String> errorMessage = _errorMessage;
+
+    private QuoteApiService apiService;
+    private Random random = new Random();
+    private List<QuoteRow> cachedQuotes = null; // Cache *filtered* quotes
+
+    public QuotesViewModel() {
+        apiService = RetrofitClient.getClient().create(QuoteApiService.class);
+        fetchQuotesIfNeeded();
+    }
+
+    public void fetchNewQuote() {
+        if (cachedQuotes != null && !cachedQuotes.isEmpty()) {
+            displayRandomQuoteFromCache();
+        } else {
+            fetchQuotesFromApi();
+        }
+    }
+
+    private void fetchQuotesIfNeeded() {
+        if (_currentQuote.getValue() == null) {
+            fetchQuotesFromApi();
+        }
+    }
+
+    private void fetchQuotesFromApi() {
+        _isLoading.setValue(true);
+        _errorMessage.setValue(null);
+
+        Call<QuoteApiResponse> call = apiService.getArabicQuotes(DATASET, CONFIG, SPLIT, 0, FETCH_LENGTH);
+
+        call.enqueue(new Callback<QuoteApiResponse>() {
+            @Override
+            public void onResponse(Call<QuoteApiResponse> call, Response<QuoteApiResponse> response) {
+                _isLoading.setValue(false);
+                if (response.isSuccessful() && response.body() != null && response.body().getRows() != null) {
+                    // --- Filter the results ---
+                    List<QuoteRow> fetchedRows = response.body().getRows();
+                    List<QuoteRow> filteredList = new ArrayList<>();
+                    for (QuoteRow row : fetchedRows) {
+                        if (row != null && row.getQuoteData() != null && row.getQuoteData().getAuthor() != null) {
+                            String author = row.getQuoteData().getAuthor().trim(); // Trim whitespace
+                            if (!EXCLUDED_AUTHORS.contains(author)) {
+                                filteredList.add(row); // Add if author is NOT excluded
+                            }
+                        }
+                    }
+                    // --- End Filtering ---
+
+                    cachedQuotes = filteredList; // Update cache with FILTERED list
+
+                    if (!cachedQuotes.isEmpty()) {
+                        displayRandomQuoteFromCache();
+                    } else {
+                        Log.w(TAG, "No usable quotes found after filtering excluded authors.");
+                        _errorMessage.setValue("No quotes found after filtering.");
+                        _currentQuote.setValue("لا توجد اقتباسات مناسبة."); // Update message
+                        _currentAuthor.setValue("");
+                        // Optional: Automatically try fetching again with a different offset? (More complex)
+                    }
+                } else {
+                    // ... (handle API error response as before) ...
+                    Log.e(TAG, "API Error Response: " + response.code() + " - " + response.message());
+                    _errorMessage.setValue("Failed to fetch quotes. Code: " + response.code());
+                    _currentQuote.setValue("خطأ في تحميل الاقتباس.");
+                    _currentAuthor.setValue("");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<QuoteApiResponse> call, Throwable t) {
+                // ... (handle API failure as before) ...
+                _isLoading.setValue(false);
+                Log.e(TAG, "API Failure: " + t.getMessage(), t);
+                _errorMessage.setValue("Network error: " + t.getMessage());
+                _currentQuote.setValue("خطأ في الشبكة.");
+                _currentAuthor.setValue("");
+            }
+        });
+    }
+
+    /**
+     * Displays a random quote from the cache.
+     * @return true if a quote was successfully displayed, false otherwise.
+     */
+    private boolean displayRandomQuoteFromCache() {
+        if (cachedQuotes == null || cachedQuotes.isEmpty()) {
+            return false; // Indicate cache is empty or failed
+        }
+
+        int randomIndex = random.nextInt(cachedQuotes.size());
+        QuoteRow randomRow = cachedQuotes.get(randomIndex);
+        QuoteData data = (randomRow != null) ? randomRow.getQuoteData() : null;
+
+        if (data != null) {
+            _currentQuote.setValue(data.getQuoteText() != null ? data.getQuoteText() : "اقتباس غير متوفر.");
+            _currentAuthor.setValue(data.getAuthor() != null ? "- " + data.getAuthor() : "");
+            return true; // Success
+        } else {
+            Log.w(TAG, "Found null data in cached quote row at index: " + randomIndex);
+            _currentQuote.setValue("اقتباس غير متوفر.");
+            _currentAuthor.setValue("");
+            return false; // Indicate failure
+        }
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\Reminder.java ====
+package com.obaidi.it_487_project_3;
+
+import androidx.room.ColumnInfo;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
+@Entity(tableName = "reminders")
+public class Reminder {
+    @PrimaryKey(autoGenerate = true)
+    public int id;
+
+    @ColumnInfo(name = "title")
+    public String title;
+
+    @ColumnInfo(name = "description")
+    public String description;
+
+    @ColumnInfo(name = "trigger_time_millis")
+    public long triggerTimeMillis; // Time when the alarm should fire
+
+    // Constructor
+    public Reminder(String title, String description, long triggerTimeMillis) {
+        this.title = title;
+        this.description = description;
+        this.triggerTimeMillis = triggerTimeMillis;
+    }
+
+    // Getters (needed for DiffUtil and potentially other logic)
+    public int getId() { return id; }
+    public String getTitle() { return title; }
+    public String getDescription() { return description; }
+    public long getTriggerTimeMillis() { return triggerTimeMillis; }
+
+    // Setters (optional, but useful)
+    public void setId(int id) { this.id = id; }
+    public void setTitle(String title) { this.title = title; }
+    public void setDescription(String description) { this.description = description; }
+    public void setTriggerTimeMillis(long triggerTimeMillis) { this.triggerTimeMillis = triggerTimeMillis; }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\ReminderBroadcast.java ====
+package com.obaidi.it_487_project_3;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+
+public class ReminderBroadcast extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String reminderTitle = intent.getStringExtra("reminderTitle");
+        String reminderDescription = intent.getStringExtra("reminderDescription");
+        int reminderId = intent.getIntExtra("reminderId", -1); // Get ID if needed
+
+        // Use a unique notification ID based on the reminder ID
+        // This allows updating/cancelling specific notifications if needed later
+        int notificationId = reminderId != -1 ? reminderId : 200; // Use reminder ID or a default
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "notifyIT487Reminder") // Use correct channel ID
+                .setSmallIcon(R.drawable.ic_baseline_notifications_active_24)
+                .setContentTitle(reminderTitle)
+                .setContentText(reminderDescription)
+                .setPriority(NotificationCompat.PRIORITY_HIGH) // Use HIGH for reminders
+                .setAutoCancel(true);
+
+        // Add style for longer descriptions if they exist
+        if (reminderDescription != null && !reminderDescription.isEmpty()) {
+            builder.setStyle(new NotificationCompat.BigTextStyle().bigText(reminderDescription));
+        }
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
+        notificationManager.notify(notificationId, builder.build());
+
+        // Optional: Here you could decide if the reminder should be auto-deleted from DB
+        // after firing. e.g., Trigger a background service or WorkManager job to delete
+        // AppDatabase.getDatabase(context).reminderDao().deleteById(reminderId); (Needs DAO method + background thread)
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\ReminderDao.java ====
+package com.obaidi.it_487_project_3;
+
+import androidx.lifecycle.LiveData;
+import androidx.room.Dao;
+import androidx.room.Delete;
+import androidx.room.Insert;
+import androidx.room.OnConflictStrategy;
+import androidx.room.Query;
+import androidx.room.Update;
+
+import java.util.List;
+
+@Dao
+public interface ReminderDao {
+
+    // Use Long for insert return type to get the generated ID
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    long insert(Reminder reminder); // Returns the row ID of the inserted item
+
+    @Update
+    void update(Reminder reminder);
+
+    @Delete
+    void delete(Reminder reminder);
+
+    @Query("SELECT * FROM reminders ORDER BY trigger_time_millis ASC") // Show earliest first
+    LiveData<List<Reminder>> getAllReminders();
+
+    @Query("SELECT * FROM reminders WHERE id = :id")
+    Reminder getReminderById(int id); // Needed for potential background tasks
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\ReminderListAdapter.java ====
+package com.obaidi.it_487_project_3;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
+import androidx.recyclerview.widget.RecyclerView;
+import java.text.DateFormat;
+import java.util.Date;
+
+public class ReminderListAdapter extends ListAdapter<Reminder, ReminderListAdapter.ReminderViewHolder> {
+
+    protected ReminderListAdapter() {
+        super(DIFF_CALLBACK);
+    }
+
+    @NonNull
+    @Override
+    public ReminderViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View itemView = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.recyclerview_reminder_item, parent, false);
+        return new ReminderViewHolder(itemView);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ReminderViewHolder holder, int position) {
+        Reminder currentReminder = getItem(position);
+        holder.bind(currentReminder);
+    }
+
+    public Reminder getReminderAt(int position) {
+        return getItem(position);
+    }
+
+    static class ReminderViewHolder extends RecyclerView.ViewHolder {
+        private final TextView titleView;
+        private final TextView descriptionView;
+        private final TextView timeView;
+
+        public ReminderViewHolder(@NonNull View itemView) {
+            super(itemView);
+            titleView = itemView.findViewById(R.id.textViewReminderTitle);
+            descriptionView = itemView.findViewById(R.id.textViewReminderDescription);
+            timeView = itemView.findViewById(R.id.textViewReminderTime);
+        }
+
+        public void bind(Reminder reminder) {
+            titleView.setText(reminder.getTitle());
+            descriptionView.setText(reminder.getDescription());
+            String formattedTime = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                    .format(new Date(reminder.getTriggerTimeMillis()));
+            timeView.setText(formattedTime);
+        }
+    }
+
+    private static final DiffUtil.ItemCallback<Reminder> DIFF_CALLBACK = new DiffUtil.ItemCallback<Reminder>() {
+        @Override
+        public boolean areItemsTheSame(@NonNull Reminder oldItem, @NonNull Reminder newItem) {
+            return oldItem.getId() == newItem.getId();
+        }
+
+        @Override
+        public boolean areContentsTheSame(@NonNull Reminder oldItem, @NonNull Reminder newItem) {
+            return oldItem.getTitle().equals(newItem.getTitle()) &&
+                    oldItem.getDescription().equals(newItem.getDescription()) &&
+                    oldItem.getTriggerTimeMillis() == newItem.getTriggerTimeMillis();
+        }
+    };
+}
+
+
+==== app\src\main\java\com\obaidi\it_487_project_3\ReminderRepository.java ====
+package com.obaidi.it_487_project_3;
+
+
+import android.app.Application;
+import androidx.lifecycle.LiveData;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future; // To get result from insert
+
+public class ReminderRepository {
+
+    private ReminderDao reminderDao;
+    private LiveData<List<Reminder>> allReminders;
+    private ExecutorService executorService;
+
+    ReminderRepository(Application application) {
+        AppDatabase db = AppDatabase.getDatabase(application);
+        reminderDao = db.reminderDao();
+        allReminders = reminderDao.getAllReminders();
+        executorService = Executors.newSingleThreadExecutor();
+    }
+
+    LiveData<List<Reminder>> getAllReminders() {
+        return allReminders;
+    }
+
+    // Return Future<Long> to get the ID after insertion
+    Future<Long> insert(Reminder reminder) {
+        return executorService.submit(() -> reminderDao.insert(reminder));
+    }
+
+    void update(Reminder reminder) {
+        executorService.execute(() -> reminderDao.update(reminder));
+    }
+
+    void delete(Reminder reminder) {
+        executorService.execute(() -> reminderDao.delete(reminder));
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\ReminderViewModel.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.Application;
+import androidx.lifecycle.AndroidViewModel;
+import androidx.lifecycle.LiveData;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+public class ReminderViewModel extends AndroidViewModel {
+
+    private ReminderRepository repository;
+    private final LiveData<List<Reminder>> allReminders;
+
+    public ReminderViewModel(Application application) {
+        super(application);
+        repository = new ReminderRepository(application);
+        allReminders = repository.getAllReminders();
+    }
+
+    public LiveData<List<Reminder>> getAllReminders() {
+        return allReminders;
+    }
+
+    // Insert and return the generated ID (blocks caller, use carefully or with callbacks)
+    public long insert(Reminder reminder) {
+        Future<Long> future = repository.insert(reminder);
+        try {
+            // This blocks the thread until the insertion is complete.
+            // Consider using LiveData or Callbacks for a fully async approach if needed.
+            return future.get();
+        } catch (ExecutionException | InterruptedException e) {
+            e.printStackTrace(); // Handle error appropriately
+            return -1; // Indicate failure
+        }
+    }
+
+    public void update(Reminder reminder) {
+        repository.update(reminder);
+    }
+
+    public void delete(Reminder reminder) {
+        repository.delete(reminder);
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\RemindersFragment.java ====
+package com.obaidi.it_487_project_3;
+
+import android.app.AlarmManager;
+import android.app.DatePickerDialog;
+import android.app.PendingIntent;
+import android.app.TimePickerDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.snackbar.Snackbar;
+
+
+public class RemindersFragment extends Fragment {
+
+
+    private FloatingActionButton fabAddReminder;
+    private RecyclerView recyclerView;
+    private ReminderListAdapter adapter;
+    private ReminderViewModel reminderViewModel;
+    private LinearLayout emptyView;
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_reminders, container, false);
+
+        recyclerView = view.findViewById(R.id.reminders_recyclerview);
+        emptyView = view.findViewById(R.id.reminders_empty_view);
+        fabAddReminder = view.findViewById(R.id.fab_add_reminder); // Find FAB
+
+        // Setup RecyclerView
+        adapter = new ReminderListAdapter();
+        recyclerView.setAdapter(adapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+
+        // Setup ViewModel
+        reminderViewModel = new ViewModelProvider(this).get(ReminderViewModel.class);
+
+        // Observe LiveData
+        reminderViewModel.getAllReminders().observe(getViewLifecycleOwner(), reminders -> {
+            adapter.submitList(reminders);
+            // Toggle empty view
+            if (reminders == null || reminders.isEmpty()) {
+                recyclerView.setVisibility(View.GONE);
+                emptyView.setVisibility(View.VISIBLE);
+            } else {
+                recyclerView.setVisibility(View.VISIBLE);
+                emptyView.setVisibility(View.GONE);
+            }
+        });
+
+        // Setup FAB Listener
+        fabAddReminder.setOnClickListener(v -> {
+            AddReminderDialogFragment dialogFragment = new AddReminderDialogFragment();
+            dialogFragment.show(getParentFragmentManager(), "AddReminderDialog");
+        });
+
+        // Setup Swipe-to-Delete
+        setupSwipeToDelete();
+
+        return view;
+    }
+
+    private void setupSwipeToDelete() {
+        new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                int position = viewHolder.getAdapterPosition();
+                Reminder reminderToDelete = adapter.getReminderAt(position);
+
+                // 1. Delete from ViewModel (which deletes from DB)
+                reminderViewModel.delete(reminderToDelete);
+
+                // 2. Cancel the associated AlarmManager alarm
+                cancelAlarm(getContext(), reminderToDelete.getId());
+
+                // 3. Show Snackbar with Undo
+                Snackbar.make(recyclerView, R.string.snackbar_reminder_deleted, Snackbar.LENGTH_LONG)
+                        .setAction(R.string.snackbar_undo, v -> {
+                            // Undo: Re-insert and Reschedule
+                            long newId = reminderViewModel.insert(reminderToDelete); // Re-insert (might get a new ID if deleted fully)
+                            if (newId != -1) {
+                                // Reschedule alarm with potentially new ID if insertion happened again
+                                // Or better, update the original reminder object with the new ID if possible
+                                scheduleAlarm(getContext(), (int) newId, reminderToDelete.getTitle(), reminderToDelete.getDescription(), reminderToDelete.getTriggerTimeMillis());
+                            } else {
+                                // Handle re-insertion error if needed
+                            }
+                        })
+                        .show();
+            }
+        }).attachToRecyclerView(recyclerView);
+    }
+
+    // --- Static Alarm Scheduling/Cancelling Methods ---
+    // Made static for potential use elsewhere, but Context is needed
+    public static void scheduleAlarm(Context context, int reminderId, String title, String description, long triggerTimeMillis) {
+        if (context == null) return;
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, ReminderBroadcast.class);
+        intent.putExtra("reminderTitle", title); // Pass data needed by broadcast
+        intent.putExtra("reminderDescription", description);
+        intent.putExtra("reminderId", reminderId); // Pass ID if needed
+
+        // Use reminderId as the request code for uniqueness
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
+                reminderId, // UNIQUE request code per reminder
+                intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT); // Update if exists
+
+        if (alarmManager != null) {
+            try {
+                // Use setExactAndAllowWhileIdle for more reliability on newer Android versions
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTimeMillis, pendingIntent);
+                } else {
+                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTimeMillis, pendingIntent);
+                }
+            } catch (SecurityException se) {
+                // Handle potential lack of SCHEDULE_EXACT_ALARM permission on Android 12+
+                // Maybe fall back to setWindow or inform the user
+                Toast.makeText(context, "Permission needed to set exact alarms.", Toast.LENGTH_LONG).show();
+                // Consider using AlarmManagerCompat.setExactAndAllowWhileIdle() from androidx.core
+            }
+        }
+    }
+
+    public static void cancelAlarm(Context context, int reminderId) {
+        if (context == null) return;
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, ReminderBroadcast.class); // MUST be the same intent used for scheduling
+
+        // Recreate the EXACT same PendingIntent used for scheduling
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
+                reminderId, // SAME UNIQUE request code
+                intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_NO_CREATE); // Use NO_CREATE to check existence
+
+        if (alarmManager != null && pendingIntent != null) {
+            alarmManager.cancel(pendingIntent);
+            pendingIntent.cancel(); // Also cancel the PendingIntent itself
+            // Log.d("RemindersFragment", "Cancelled alarm for ID: " + reminderId);
+        } else {
+            // Log.w("RemindersFragment", "Alarm cancellation failed for ID: " + reminderId + " - PendingIntent might not exist.");
+        }
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\RetrofitClient.java ====
+package com.obaidi.it_487_project_3;
+
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+
+public class RetrofitClient {
+
+    private static Retrofit retrofit = null;
+    private static final String BASE_URL = "https://datasets-server.huggingface.co/";
+
+    public static Retrofit getClient() {
+        if (retrofit == null) {
+            retrofit = new Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+        }
+        return retrofit;
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\TimerFragment.java ====
+package com.obaidi.it_487_project_3;
+
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout; // Import LinearLayout
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Observer;
+import androidx.lifecycle.ViewModelProvider;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.progressindicator.CircularProgressIndicator;
+
+import java.util.ArrayList; // Import ArrayList
+import java.util.List;     // Import List
+
+public class TimerFragment extends Fragment {
+
+    // UI Elements
+    private TextView textViewCountdown;
+    private TextView textViewPhase;
+    private MaterialButton buttonStartPause;
+    private MaterialButton buttonResetSkip;
+    private CircularProgressIndicator progressCircular;
+
+    // ViewModel
+    private TimerViewModel timerViewModel;
+    private List<View> dotIndicators; // List to hold dot views
+
+    // Notification Constants
+    private static final String CHANNEL_ID = "notifyIT487Timer"; // Specific channel for timer
+    private static final int NOTIFICATION_ID = 201; // Unique ID for timer notifications
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 124; // Unique code
+
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_timer, container, false);
+
+        // Initialize UI Elements
+        textViewCountdown = view.findViewById(R.id.text_view_countdown);
+        textViewPhase = view.findViewById(R.id.text_view_phase);
+        buttonStartPause = view.findViewById(R.id.button_start_pause);
+        buttonResetSkip = view.findViewById(R.id.button_reset_skip);
+        progressCircular = view.findViewById(R.id.progress_circular);
+
+        // Initialize Dot Indicators
+        dotIndicators = new ArrayList<>();
+        dotIndicators.add(view.findViewById(R.id.dot1));
+        dotIndicators.add(view.findViewById(R.id.dot2));
+        dotIndicators.add(view.findViewById(R.id.dot3));
+        dotIndicators.add(view.findViewById(R.id.dot4));
+
+        // Create Notification Channel (do this early)
+        createTimerNotificationChannel();
+
+        // --- Get the ViewModel ---
+        // Scope to the Activity to survive fragment replacement
+        timerViewModel = new ViewModelProvider(requireActivity()).get(TimerViewModel.class);
+
+
+        // --- Observe LiveData ---
+        timerViewModel.timeLeftFormatted.observe(getViewLifecycleOwner(), formattedTime -> {
+            if (textViewCountdown != null) {
+                textViewCountdown.setText(formattedTime);
+            }
+        });
+        timerViewModel.phaseTextResId.observe(getViewLifecycleOwner(), resId -> {
+            if (textViewPhase != null && resId != null && getContext() != null) {
+                textViewPhase.setText(getString(resId)); // Get string using Fragment's context
+            }
+        });
+        Observer<Object> dotUpdateObserver = ignored -> updateDotIndicators();
+
+        // Observe Notification Events
+        timerViewModel.notificationEvent.observe(getViewLifecycleOwner(), event -> {
+            TimerViewModel.NotificationInfo info = event.getContentIfNotHandled(); // Consume the event
+            if (info != null && getContext() != null) {
+                // Construct the localized string HERE in the Fragment
+                String completedPhaseName = getString(info.completedPhaseResId);
+                String nextPhaseName = getString(info.nextPhaseResId);
+                String message = getString(info.formatResId, completedPhaseName, nextPhaseName); // Format the string
+
+                // Show notification with the constructed message
+                checkAndShowNotification(message);
+            }
+        });
+
+        timerViewModel.phaseText.observe(getViewLifecycleOwner(), phase -> {
+            if (textViewPhase != null) {
+                textViewPhase.setText(phase);
+            }
+        });
+
+        timerViewModel.timerRunning.observe(getViewLifecycleOwner(), isRunning -> {
+            updateButtons(isRunning); // Update buttons based on running state
+        });
+
+        timerViewModel.timeLeftInMillis.observe(getViewLifecycleOwner(), timeLeft -> {
+            updateProgressBar(); // Update progress bar when time changes
+        });
+
+        timerViewModel.totalTimeForPhase.observe(getViewLifecycleOwner(), totalTime -> {
+            updateProgressBar(); // Update progress bar max when total time changes
+        });
+
+        // Observe current phase for dot updates
+        timerViewModel.currentPhase.observe(getViewLifecycleOwner(), dotUpdateObserver);
+
+        // Observe Pomodoro Count for dot updates
+        timerViewModel.pomodoroCount.observe(getViewLifecycleOwner(), dotUpdateObserver);
+
+
+        // --- Setup Button Listeners ---
+        buttonStartPause.setOnClickListener(v -> timerViewModel.toggleTimer());
+        buttonResetSkip.setOnClickListener(v -> {
+            // Check running state from ViewModel to decide action
+            if (Boolean.TRUE.equals(timerViewModel.timerRunning.getValue())) {
+                timerViewModel.skipPhase();
+                Toast.makeText(getContext(), "Skipped", Toast.LENGTH_SHORT).show();
+            } else {
+                timerViewModel.resetTimer();
+                Toast.makeText(getContext(), "Reset", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Initial UI state setup based on ViewModel current values
+        updateButtons(Boolean.TRUE.equals(timerViewModel.timerRunning.getValue()));
+        updateProgressBar();
+        updateDotIndicators(); // Initial dot state based on current ViewModel values
+
+        return view;
+    }
+
+
+    // Updated method to handle phase-specific dot colors
+    private void updateDotIndicators() {
+        if (dotIndicators == null || getContext() == null || timerViewModel == null) return;
+
+        TimerViewModel.PomodoroPhase phase = timerViewModel.currentPhase.getValue();
+        Integer count = timerViewModel.pomodoroCount.getValue();
+
+        int currentCount = (count != null) ? count : 0;
+        if (phase == null) phase = TimerViewModel.PomodoroPhase.WORKING; // Default
+
+        int activeDrawableId;
+        int inactiveDrawableId = R.drawable.dot_indicator_inactive;
+        boolean highlightAllDots = false; // Flag for long break
+
+        // Determine the drawable for active dots based on the current phase
+        switch (phase) {
+            case WORKING:
+                activeDrawableId = R.drawable.dot_indicator_active; // Primary color
+                break;
+            case SHORT_BREAK:
+                activeDrawableId = R.drawable.dot_indicator_short_break; // Secondary color
+                break;
+            case LONG_BREAK:
+                activeDrawableId = R.drawable.dot_indicator_long_break; // Tertiary color
+                highlightAllDots = true; // Special case for long break: all dots use the active color
+                break;
+            default:
+                activeDrawableId = R.drawable.dot_indicator_inactive; // Should not happen
+        }
+
+        // Number of dots to potentially activate based on completed work sessions
+        // During breaks, this still reflects the work sessions *before* the break started
+        int activeDotsToShow = Math.max(0, Math.min(currentCount, dotIndicators.size()));
+
+        for (int i = 0; i < dotIndicators.size(); i++) {
+            View dot = dotIndicators.get(i);
+            if (highlightAllDots) {
+                // Long break: All dots get the long break color
+                dot.setBackground(ContextCompat.getDrawable(getContext(), activeDrawableId));
+            } else if (i < activeDotsToShow) {
+                // Work or Short Break: Activate dots up to the completed count
+                dot.setBackground(ContextCompat.getDrawable(getContext(), activeDrawableId));
+            } else {
+                // Inactive dots
+                dot.setBackground(ContextCompat.getDrawable(getContext(), inactiveDrawableId));
+            }
+        }
+    }
+
+
+    private void updateProgressBar() {
+        Long timeLeft = timerViewModel.timeLeftInMillis.getValue();
+        Long totalTime = timerViewModel.totalTimeForPhase.getValue();
+
+        if (progressCircular != null && timeLeft != null && totalTime != null && totalTime > 0) {
+            progressCircular.setMax(totalTime.intValue()); // Use milliseconds for max
+            progressCircular.setProgress(timeLeft.intValue(), true); // Use milliseconds for progress
+        } else if (progressCircular != null) {
+            progressCircular.setMax(100); // Default max
+            progressCircular.setProgress(0, true); // Default progress
+        }
+    }
+
+    private void updateButtons(boolean isRunning) {
+        if (buttonStartPause == null || buttonResetSkip == null || getContext() == null) return; // Null checks
+
+        if (isRunning) {
+            buttonStartPause.setText(R.string.button_pause);
+            buttonStartPause.setIcon(ContextCompat.getDrawable(getContext(), R.drawable.ic_baseline_pause_24));
+            buttonResetSkip.setText(R.string.button_skip);
+            buttonResetSkip.setIcon(ContextCompat.getDrawable(getContext(), R.drawable.ic_baseline_skip_next_24));
+        } else {
+            buttonStartPause.setText(R.string.button_start);
+            buttonStartPause.setIcon(ContextCompat.getDrawable(getContext(), R.drawable.ic_baseline_play_arrow_24));
+            buttonResetSkip.setText(R.string.button_reset);
+            buttonResetSkip.setIcon(ContextCompat.getDrawable(getContext(), R.drawable.ic_baseline_replay_24));
+        }
+    }
+
+    // No need for most of the timer logic methods (startTimer, pauseTimer, etc.) here anymore
+    // They are now in the ViewModel
+    private void checkAndShowNotification(String message) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13+
+            if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                // Request permission
+                ActivityCompat.requestPermissions(requireActivity(), new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
+                // Optionally store the message to show after permission granted, or show a Toast for now
+                Toast.makeText(getContext(), "Notification permission needed", Toast.LENGTH_SHORT).show();
+            } else {
+                // Permission already granted
+                showNotification(message);
+            }
+        } else {
+            // No runtime permission needed for older versions
+            showNotification(message);
+        }
+    }
+
+    // Handle permission request result (add this method to the Fragment)
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, you might want to reshow the notification if you stored the message
+                Toast.makeText(getContext(), "Notification permission granted!", Toast.LENGTH_SHORT).show();
+                // Example: showNotification(storedMessage); // if you stored it
+            } else {
+                Toast.makeText(getContext(), "Notification permission denied!", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void createTimerNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Pomodoro Timer Notifications";
+            String description = "Notifications for Pomodoro phase changes";
+            int importance = NotificationManager.IMPORTANCE_HIGH; // Use High for timer alerts
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            // Register the channel with the system
+            NotificationManager notificationManager = requireContext().getSystemService(NotificationManager.class);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void showNotification(String message) {
+        Context context = getContext();
+        if (context == null) return; // Avoid issues if context is unavailable
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_baseline_timer_24) // Use a timer icon
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH) // High priority for timers
+                .setAutoCancel(true); // Dismiss notification when tapped (optional)
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
+        // notificationId is a unique int for each notification that you must define
+        notificationManager.notify(NOTIFICATION_ID, builder.build());
+    }
+
+    @Override
+    public void onDestroyView() {
+        // No need to cancel timer here, ViewModel handles it in onCleared()
+        super.onDestroyView();
+        dotIndicators = null; // Clear references to views
+
+    }
+}
+
+==== app\src\main\java\com\obaidi\it_487_project_3\TimerViewModel.java ====
+package com.obaidi.it_487_project_3;
+
+import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.annotation.StringRes;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.ViewModel;
+
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
+public class TimerViewModel extends ViewModel {
+
+    // Pomodoro States and Durations (Copied from Fragment)
+    public enum PomodoroPhase { // Make public or provide getter
+        WORKING,
+        SHORT_BREAK,
+        LONG_BREAK
+    }
+
+//    private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(1); // 1 min FOR TESTING
+//    private static final long SHORT_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(10); // 10 sec FOR TESTING
+//    private static final long LONG_BREAK_DURATION_MS = TimeUnit.SECONDS.toMillis(20); // 20 sec FOR TESTING
+     private static final long WORK_DURATION_MS = TimeUnit.MINUTES.toMillis(25);
+     private static final long SHORT_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(5);
+     private static final long LONG_BREAK_DURATION_MS = TimeUnit.MINUTES.toMillis(15);
+    private static final int LONG_BREAK_INTERVAL = 4;
+
+    // LiveData for UI State
+    private final MutableLiveData<Long> _timeLeftInMillis = new MutableLiveData<>();
+    public LiveData<Long> timeLeftInMillis = _timeLeftInMillis;
+
+    private final MutableLiveData<Boolean> _timerRunning = new MutableLiveData<>(false);
+    public LiveData<Boolean> timerRunning = _timerRunning;
+
+    private final MutableLiveData<PomodoroPhase> _currentPhase = new MutableLiveData<>(PomodoroPhase.WORKING);
+    public LiveData<PomodoroPhase> currentPhase = _currentPhase;
+
+    private final MutableLiveData<Integer> _pomodoroCount = new MutableLiveData<>(0);
+    public LiveData<Integer> pomodoroCount = _pomodoroCount; // Optional: If UI needs count
+
+    private final MutableLiveData<Long> _totalTimeForPhase = new MutableLiveData<>();
+    public LiveData<Long> totalTimeForPhase = _totalTimeForPhase;
+
+    private final MutableLiveData<String> _phaseText = new MutableLiveData<>();
+    public LiveData<String> phaseText = _phaseText;
+
+    private final MutableLiveData<String> _timeLeftFormatted = new MutableLiveData<>();
+    public LiveData<String> timeLeftFormatted = _timeLeftFormatted;
+
+    private final MutableLiveData<Integer> _phaseTextResId = new MutableLiveData<>();
+    public LiveData<Integer> phaseTextResId = _phaseTextResId; // Expose Integer LiveData
+    private CountDownTimer countDownTimer;
+    private final MutableLiveData<Event<NotificationInfo>> _notificationEvent = new MutableLiveData<>();
+    public LiveData<Event<NotificationInfo>> notificationEvent = _notificationEvent;
+    public TimerViewModel() {
+        // Initial setup when ViewModel is first created
+        resetTimerInternal();
+    }
+
+    public void toggleTimer() {
+        if (Boolean.TRUE.equals(_timerRunning.getValue())) {
+            pauseTimerInternal();
+        } else {
+            startTimerInternal();
+        }
+    }
+
+    public void resetTimer() {
+        resetTimerInternal();
+    }
+
+    public void skipPhase() {
+        skipPhaseInternal();
+    }
+
+
+    // Helper class to hold notification info (Resource IDs)
+    public static class NotificationInfo {
+        @StringRes public final int formatResId;
+        @StringRes public final int completedPhaseResId;
+        @StringRes public final int nextPhaseResId;
+
+        public NotificationInfo(@StringRes int formatResId, @StringRes int completedPhaseResId, @StringRes int nextPhaseResId) {
+            this.formatResId = formatResId;
+            this.completedPhaseResId = completedPhaseResId;
+            this.nextPhaseResId = nextPhaseResId;
+        }
+    }
+
+    private void startTimerInternal() {
+        if (countDownTimer != null) {
+            countDownTimer.cancel();
+        }
+
+        Long timeLeft = _timeLeftInMillis.getValue();
+        if (timeLeft == null || timeLeft <= 0) {
+            // If time is up or invalid, reset to current phase duration
+            timeLeft = getCurrentPhaseDuration();
+            _timeLeftInMillis.setValue(timeLeft);
+        }
+        _totalTimeForPhase.setValue(getCurrentPhaseDuration()); // Ensure total time is set
+        _timerRunning.setValue(true);
+
+        countDownTimer = new CountDownTimer(timeLeft, 50) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                _timeLeftInMillis.setValue(millisUntilFinished);
+                updateFormattedTime(millisUntilFinished);
+            }
+
+            @Override
+            public void onFinish() {
+                _timerRunning.setValue(false);
+                // Use Handler to ensure phase change happens on main thread if needed,
+                // and slightly delays to avoid race conditions with UI updates
+                new Handler(Looper.getMainLooper()).postDelayed(() -> handlePhaseCompletionInternal(), 100);
+            }
+        }.start();
+    }
+
+    private void pauseTimerInternal() {
+        if (countDownTimer != null) {
+            countDownTimer.cancel();
+        }
+        _timerRunning.setValue(false);
+    }
+
+    private void resetTimerInternal() {
+        pauseTimerInternal(); // Stop any running timer
+        _pomodoroCount.setValue(0);
+        _currentPhase.setValue(PomodoroPhase.WORKING);
+        long duration = getCurrentPhaseDuration();
+        _totalTimeForPhase.setValue(duration);
+        _timeLeftInMillis.setValue(duration);
+        updatePhaseTextResId();
+        updateFormattedTime(duration);
+    }
+
+    private void skipPhaseInternal() {
+        pauseTimerInternal(); // Stop current timer
+        postNotificationEvent(_currentPhase.getValue(), true); // Indicate skip
+        handlePhaseCompletionInternal(); // Move to next phase
+    }
+
+    private void handlePhaseCompletionInternal() {
+        PomodoroPhase previousPhase = _currentPhase.getValue();
+        PomodoroPhase current = _currentPhase.getValue();
+        int count = _pomodoroCount.getValue() != null ? _pomodoroCount.getValue() : 0;
+        PomodoroPhase nextPhase;
+
+        if (current == PomodoroPhase.WORKING) {
+            count++;
+            _pomodoroCount.setValue(count);
+            if (count % LONG_BREAK_INTERVAL == 0 && count > 0) {
+                nextPhase = PomodoroPhase.LONG_BREAK;
+            } else {
+                nextPhase = PomodoroPhase.SHORT_BREAK;
+            }
+        } else {
+            nextPhase = PomodoroPhase.WORKING;
+        }
+
+        _currentPhase.setValue(nextPhase);
+        postNotificationEvent(previousPhase, false); // Post notification based on phase change
+
+        long duration = getCurrentPhaseDuration();
+        _totalTimeForPhase.setValue(duration);
+        _timeLeftInMillis.setValue(duration);
+        updatePhaseTextResId(); // Update the resource ID
+        updateFormattedTime(duration);
+    }
+
+    // Notification message generation needs context, ideally done in Fragment,
+    // but since it's simple text, generating here is acceptable for now.
+    // If it needed plural strings etc., it would *have* to move to Fragment.
+    @StringRes
+    private int getPhaseNameResId(PomodoroPhase phase) {
+        if (phase == null) return R.string.timer_phase_focus; // Default safety
+        switch (phase) {
+            case WORKING: return R.string.timer_phase_focus;
+            case SHORT_BREAK: return R.string.timer_phase_short_break;
+            case LONG_BREAK: return R.string.timer_phase_long_break;
+            default: return R.string.timer_phase_focus;
+        }
+    }
+
+    // Rewritten method posts NotificationInfo object
+    private void postNotificationEvent(PomodoroPhase completedPhase, boolean skipped) {
+        PomodoroPhase nextPhase = _currentPhase.getValue();
+        if (completedPhase == null || nextPhase == null) return;
+
+        // Get Resource IDs for the phase names
+        @StringRes int completedPhaseNameResId = getPhaseNameResId(completedPhase);
+        @StringRes int nextPhaseNameResId = getPhaseNameResId(nextPhase);
+
+        // Determine which format string Resource ID to use
+        @StringRes int formatStringResId = skipped ?
+                R.string.notification_timer_phase_skipped :
+                R.string.notification_timer_phase_finished;
+
+        // Create the info object
+        NotificationInfo info = new NotificationInfo(formatStringResId, completedPhaseNameResId, nextPhaseNameResId);
+
+        // Post the event
+        _notificationEvent.setValue(new Event<>(info));
+    }
+
+    private long getCurrentPhaseDuration() {
+        PomodoroPhase phase = _currentPhase.getValue();
+        if (phase == null) phase = PomodoroPhase.WORKING; // Default
+        switch (phase) {
+            case WORKING: return WORK_DURATION_MS;
+            case SHORT_BREAK: return SHORT_BREAK_DURATION_MS;
+            case LONG_BREAK: return LONG_BREAK_DURATION_MS;
+            default: return WORK_DURATION_MS;
+        }
+    }
+
+    private void updatePhaseTextResId() {
+        PomodoroPhase phase = _currentPhase.getValue();
+        if (phase == null) phase = PomodoroPhase.WORKING;
+        @StringRes int resId; // Use annotation for clarity
+        switch (phase) {
+            case WORKING:
+                resId = R.string.timer_phase_focus;
+                break;
+            case SHORT_BREAK:
+                resId = R.string.timer_phase_short_break;
+                break;
+            case LONG_BREAK:
+                resId = R.string.timer_phase_long_break;
+                break;
+            default:
+                resId = R.string.timer_phase_focus; // Default
+        }
+        _phaseTextResId.setValue(resId); // Set the resource ID
+    }
+
+    private void updateFormattedTime(long millis) {
+        long minutes = TimeUnit.MILLISECONDS.toMinutes(millis);
+        long seconds = TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MINUTES.toSeconds(minutes);
+        String timeLeftFormatted = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
+        _timeLeftFormatted.setValue(timeLeftFormatted);
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        // Cancel the timer when the ViewModel is destroyed
+        if (countDownTimer != null) {
+            countDownTimer.cancel();
+            countDownTimer = null;
+        }
+    }
+}
+
+==== app\src\main\res\color\bottom_nav_color.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="?attr/colorPrimary" />
+    <item android:color="?attr/colorOnSurfaceVariant" />  <!-- Use a more appropriate attribute -->
+</selector>
+
+==== app\src\main\res\layout\activity_main.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/bottomNavigationView" />
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavigationView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        app:menu="@menu/bottom_navigation_menu"
+        app:labelVisibilityMode="labeled"
+        android:background="?attr/colorSurface"
+    app:itemIconTint="@color/bottom_nav_color"
+    app:itemTextColor="@color/bottom_nav_color"
+    style="@style/Widget.Material3.BottomNavigationView"  />
+
+
+</RelativeLayout>
+
+==== app\src\main\res\layout\dialog_add_reminder.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"> <!-- Dialog padding -->
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/dialog_textInputLayoutReminderTitle"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_reminder_title_required">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/dialog_edit_text_reminder_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textCapSentences" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/dialog_textInputLayoutReminderDescription"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_reminder_description_optional">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/dialog_edit_text_reminder_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textCapSentences|textMultiLine"
+            android:minLines="2"
+            android:gravity="top|start"/>
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/dialog_textInputLayoutReminderDate"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_select_date_time_required">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/dialog_edit_text_reminder_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="true"
+            android:inputType="none"
+            android:drawableEnd="@drawable/ic_baseline_calendar_month_24"
+            app:drawableTint="?attr/colorControlNormal" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+</LinearLayout>
+
+==== app\src\main\res\layout\dialog_edit_note.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/layout/dialog_edit_note.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"> <!-- Add more padding for dialogs -->
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/edit_note_text_input_layout"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_edit_note"> <!-- Use a different hint -->
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edit_note_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textMultiLine"
+            android:minLines="5"
+            android:gravity="top|start" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+</LinearLayout>
+
+==== app\src\main\res\layout\fragment_dashboard.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.dashboard.DashboardFragment">
+
+    <TextView
+        android:id="@+id/text_dashboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+==== app\src\main\res\layout\fragment_home.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.home.HomeFragment">
+
+    <TextView
+        android:id="@+id/text_home"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+==== app\src\main\res\layout\fragment_notes.xml ====
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+
+        <!-- Empty State View (Initially Gone) -->
+        <LinearLayout
+            android:id="@+id/empty_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible"> <!-- Show in preview -->
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_baseline_notes_24"
+                app:tint="?android:attr/textColorSecondary"
+                android:contentDescription="@string/desc_no_notes_icon" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/label_no_notes"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textColor="?android:attr/textColorSecondary"/>
+
+        </LinearLayout>
+
+        <!-- RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerview"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="8dp"
+            android:clipToPadding="false"
+            android:paddingBottom="16dp"
+            tools:listitem="@layout/recyclerview_item"/>
+
+
+
+        <!-- Input Section -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/textInputLayoutNotes"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/hint_enter_note">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_text_notes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="3"
+                android:gravity="top|start" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_save_notes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/button_save_note"
+            android:layout_gravity="end"
+            android:layout_marginTop="8dp"/>
+
+    </LinearLayout>
+
+
+
+    <!-- CoordinatorLayout allows placing FAB or Snackbar -->
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+==== app\src\main\res\layout\fragment_notifications.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.notifications.NotificationsFragment">
+
+    <TextView
+        android:id="@+id/text_notifications"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+==== app\src\main\res\layout\fragment_quotes.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/text_view_quote"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintBottom_toTopOf="@+id/text_view_author"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toTopOf="parent"
+    app:layout_constraintVertical_chainStyle="packed"
+    tools:text="هنا يظهر الاقتباس العربي الجميل والطويل أحيانًا." />
+
+    <!-- New TextView for Author -->
+    <TextView
+        android:id="@+id/text_view_author"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+        android:textColor="?attr/colorSecondary"
+    app:layout_constraintBottom_toTopOf="@+id/button_refresh_quote"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toBottomOf="@+id/text_view_quote"
+    tools:text="- المؤلف الشهير" />
+
+    <ProgressBar
+        android:id="@+id/progress_bar_quote"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/text_view_author"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toTopOf="@+id/text_view_quote"
+    tools:visibility="visible" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_refresh_quote"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/button_new_quote"
+        app:icon="@drawable/ic_baseline_refresh_24"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_view_author" /> <!-- Below Author -->
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+==== app\src\main\res\layout\fragment_reminders.xml ====
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Use NestedScrollView to allow scrolling if content exceeds screen height -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- List Section Header -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/header_upcoming_reminders"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- FrameLayout to easily switch between list and empty state -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+            <!-- Empty State View -->
+            <LinearLayout
+                android:id="@+id/reminders_empty_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:minHeight="150dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:src="@drawable/ic_baseline_notifications_none_24"
+            app:tint="?attr/colorSecondary"
+            android:contentDescription="@string/desc_no_reminders_icon" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/label_no_reminders"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textColor="?attr/colorSecondary"/>
+
+        </LinearLayout>
+
+        <!-- RecyclerView for Reminders -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/reminders_recyclerview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+        android:nestedScrollingEnabled="false"
+        android:clipToPadding="false"
+        android:paddingBottom="16dp"
+        tools:listitem="@layout/recyclerview_reminder_item"
+        tools:itemCount="3"/>
+
+    </FrameLayout>
+
+
+</LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_add_reminder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        app:srcCompat="@drawable/ic_baseline_add_24"
+        android:contentDescription="@string/desc_add_reminder_fab" />
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+==== app\src\main\res\layout\fragment_timer.xml ====
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+
+    <TextView
+        android:id="@+id/text_view_crn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        android:text="@string/crn_label"
+        android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toTopOf="@+id/text_view_phase"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:text="CRN: 12345" />
+
+    <TextView
+        android:id="@+id/text_view_group_members"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/group_members_label"
+        android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toTopOf="@+id/text_view_crn"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="Group: Ahmed, Abdullah" />
+
+
+    <TextView
+        android:id="@+id/text_view_phase"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+        app:layout_constraintBottom_toTopOf="@+id/progress_circular"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:text="@string/timer_phase_focus" />
+
+    <com.google.android.material.progressindicator.CircularProgressIndicator
+        android:id="@+id/progress_circular"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        app:indicatorDirectionCircular="counterclockwise"
+        app:indicatorSize="250dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.4"  /> <!-- Adjust bias to move circle up slightly -->
+
+
+    <TextView
+        android:id="@+id/text_view_countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.Material3.DisplayMedium"
+        app:layout_constraintBottom_toBottomOf="@+id/progress_circular"
+        app:layout_constraintEnd_toEndOf="@+id/progress_circular"
+        app:layout_constraintStart_toStartOf="@+id/progress_circular"
+        app:layout_constraintTop_toTopOf="@+id/progress_circular"
+        tools:text="25:00" />
+
+    <!-- LinearLayout for Indicator Dots -->
+    <LinearLayout
+        android:id="@+id/dots_indicator_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/progress_circular"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <View
+            android:id="@+id/dot1"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/dot_indicator_inactive"/>
+
+        <View
+            android:id="@+id/dot2"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/dot_indicator_inactive"/>
+
+        <View
+            android:id="@+id/dot3"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/dot_indicator_inactive"/>
+
+        <View
+            android:id="@+id/dot4"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:background="@drawable/dot_indicator_inactive"/>
+
+    </LinearLayout>
+
+
+    <LinearLayout
+        android:id="@+id/button_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/dots_indicator_layout"> <!-- Constrain below dots -->
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_start_pause"
+            style="@style/Widget.Material3.Button.Icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="@string/button_start"
+            app:icon="@drawable/ic_baseline_play_arrow_24" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_reset_skip"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/button_reset"
+            app:icon="@drawable/ic_baseline_replay_24" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+==== app\src\main\res\layout\recyclerview_item.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="4dp"
+    app:cardElevation="2dp"
+    app:cardCornerRadius="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/textViewNoteText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            tools:text="This is the main content of the note. It might be quite long sometimes." />
+
+        <TextView
+            android:id="@+id/textViewTimestamp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+            android:textColor="?android:attr/textColorSecondary"
+            tools:text="Oct 26, 2023 10:30 AM" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
+
+==== app\src\main\res\layout\recyclerview_reminder_item.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/layout/recyclerview_reminder_item.xml -->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="4dp"
+    app:cardElevation="1dp"
+    app:cardCornerRadius="12dp">
+
+<LinearLayout
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:orientation="vertical"
+android:padding="16dp">
+
+<TextView
+    android:id="@+id/textViewReminderTitle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+    android:maxLines="2"
+    android:ellipsize="end"
+    tools:text="Study Chapter 12 for the final exam next week" />
+
+<TextView
+    android:id="@+id/textViewReminderDescription"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+    android:textColor="?android:attr/textColorSecondary"
+    android:maxLines="3"
+android:ellipsize="end"
+tools:text="Focus on algorithms and data structures. Review lecture notes and practice problems." />
+
+<TextView
+    android:id="@+id/textViewReminderTime"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+android:gravity="end"
+android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+android:textColor="?attr/colorPrimary"
+tools:text="Oct 27, 2023 09:00 AM" />
+
+</LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+==== app\src\main\res\menu\bottom_navigation_menu.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/navigation_timer"
+        android:icon="@drawable/ic_baseline_timer_24"
+        android:title="@string/nav_timer"/>
+
+    <item
+        android:id="@+id/navigation_notes"
+        android:icon="@drawable/ic_baseline_notes_24"
+        android:title="@string/nav_notes"/>
+
+    <item
+        android:id="@+id/navigation_reminders"
+        android:icon="@drawable/ic_baseline_notifications_active_24"
+        android:title="@string/nav_reminders"/>
+
+    <item
+        android:id="@+id/navigation_quotes"
+        android:icon="@drawable/ic_baseline_format_quote_24"
+        android:title="@string/nav_quotes"/>
+
+</menu>
+
+==== app\src\main\res\navigation\mobile_navigation.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/navigation_home">
+
+    <fragment
+        android:id="@+id/navigation_home"
+        android:name="com.obaidi.it_487_project_3.ui.home.HomeFragment"
+        android:label="@string/title_home"
+        tools:layout="@layout/fragment_home" />
+
+    <fragment
+        android:id="@+id/navigation_dashboard"
+        android:name="com.obaidi.it_487_project_3.ui.dashboard.DashboardFragment"
+        android:label="@string/title_dashboard"
+        tools:layout="@layout/fragment_dashboard" />
+
+    <fragment
+        android:id="@+id/navigation_notifications"
+        android:name="com.obaidi.it_487_project_3.ui.notifications.NotificationsFragment"
+        android:label="@string/title_notifications"
+        tools:layout="@layout/fragment_notifications" />
+</navigation>
+
+==== app\src\main\res\values-ar-rSA\strings.xml ====
+<resources>
+    <string name="app_name">مُعين</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+    <string name="timer_phase_focus">وقت التركيز</string>
+    <string name="timer_phase_short_break">استراحة قصيرة</string>
+    <string name="timer_phase_long_break">استراحة طويلة</string>
+    <string name="button_start">ابدأ</string>
+    <string name="button_pause">إيقاف مؤقت</string>
+    <string name="button_reset">إعادة ضبط</string>
+    <string name="button_skip">تخطِ</string>
+    <string name="crn_label">CRN: 22598</string>
+    <string name="group_members_label">ABDULRAHMAN ABDULLAH ALOBAIDI S210019932, \nALWALEED TALAL A ALMUTAIRI S210064728</string>
+    <!-- Notes -->
+    <string name="hint_enter_note">أدخل ملاحظتك هنا…</string>
+    <string name="button_save_note">حفظ الملاحظة</string>
+    <string name="label_no_notes">لا توجد ملاحظات بعد!</string>
+    <string name="desc_no_notes_icon">أيقونة تشير لعدم وجود ملاحظات</string>
+    <string name="toast_note_saved">تم حفظ الملاحظة!</string>
+    <string name="toast_enter_note">الرجاء إدخال ملاحظة!</string>
+    <string name="snackbar_note_deleted">تم حذف الملاحظة</string>
+    <string name="snackbar_undo">تراجع</string>
+    <string name="hint_edit_note">تعديل الملاحظة</string>
+    <string name="dialog_title_edit_note">تعديل الملاحظة</string>
+    <string name="dialog_save">حفظ</string>
+    <string name="dialog_cancel">إلغاء</string>
+    <string name="toast_note_updated">تم تحديث الملاحظة!</string>
+    <string name="toast_note_cannot_be_empty">لا يمكن أن تكون الملاحظة فارغة!</string>
+    <string name="error_loading_note">خطأ في تحميل بيانات الملاحظة.</string>
+    <string name="error_updating_note">خطأ في تحديث الملاحظة.</string>
+    <!-- Reminders -->
+    <string name="header_add_reminder">إضافة تذكير جديد</string>
+    <string name="hint_reminder_title_required">عنوان التذكير*</string>
+    <string name="hint_reminder_description_optional">الوصف (اختياري)</string>
+    <string name="hint_select_date_time_required">اختر التاريخ والوقت*</string>
+    <string name="button_set_reminder">ضبط التذكير</string>
+    <string name="header_upcoming_reminders">التذكيرات القادمة</string>
+    <string name="label_no_reminders">لا توجد تذكيرات قادمة!</string>
+    <string name="desc_no_reminders_icon">أيقونة تشير لعدم وجود تذكيرات</string>
+    <string name="toast_enter_reminder_title">الرجاء إدخال عنوان!</string>
+    <string name="toast_select_date_time">الرجاء اختيار التاريخ والوقت!</string>
+    <string name="toast_select_future_time">الرجاء اختيار وقت مستقبلي!</string>
+    <string name="toast_reminder_set">تم ضبط التذكير!</string>
+    <string name="snackbar_reminder_deleted">تم حذف التذكير</string>
+    <string name="error_saving_reminder">خطأ في حفظ التذكير.</string>
+    <string name="error_scheduling_alarm">خطأ في جدولة منبه التذكير.</string>
+    <string name="desc_add_reminder_fab">إضافة تذكير جديد</string>
+    <string name="dialog_title_add_reminder">إضافة تذكير</string>
+    <string name="dialog_add">إضافة</string>
+    <!-- Quotes -->
+    <string name="button_new_quote">اقتباس جديد</string>
+    <string name="default_quote_placeholder">جار تحميل الاقتباس…</string>
+    <!-- Notifications -->
+    <string name="channel_name_reminders">تذكيرات مُعين</string>
+    <string name="channel_description_reminders">إشعارات للتذكيرات الدراسية القادمة</string>
+    <string name="channel_name_timer">مؤقت بومودورو</string>
+    <string name="channel_description_timer">إشعارات لتغييرات مراحل مؤقت بومودورو</string>
+    <string name="notification_timer_phase_finished">"انتهى %1$s! حان وقت %2$s."</string>
+    <string name="notification_timer_phase_skipped">"تم تخطي %1$s! بدء %2$s."</string>
+    <!-- General -->
+    <string name="nav_timer">المؤقت</string>
+    <string name="nav_notes">الملاحظات</string>
+    <string name="nav_reminders">التذكيرات</string>
+    <string name="nav_quotes">اقتباسات</string>
+
+    <!-- ... Translate ALL other strings ... -->
+</resources>
+
+==== app\src\main\res\values-night\colors.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="md_theme_dark_primary">#D0BCFF</color>
+    <color name="md_theme_dark_secondary">#CCC2DC</color>
+    <color name="md_theme_dark_tertiary">#EFB8BC</color>
+    <color name="md_theme_dark_error">#F2B8B5</color>
+    <color name="md_theme_dark_background">#1C1B1F</color>
+    <color name="md_theme_dark_surface">#1C1B1F</color>
+    <color name="md_theme_dark_onPrimary">#381E72</color>
+    <color name="md_theme_dark_onSecondary">#332D41</color>
+    <color name="md_theme_dark_onTertiary">#492532</color>
+    <color name="md_theme_dark_onError">#601410</color>
+    <color name="md_theme_dark_onBackground">#E6E1E5</color>
+    <color name="md_theme_dark_onSurface">#E6E1E5</color>
+</resources>
+
+==== app\src\main\res\values-night\themes.xml ====
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.IT_487_Project_3" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_theme_dark_primary</item>
+        <item name="colorSecondary">@color/md_theme_dark_secondary</item>
+        <item name="colorTertiary">@color/md_theme_dark_tertiary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_onPrimary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_onSecondary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_onTertiary</item>
+        <item name="android:statusBarColor">?attr/colorSurfaceVariant</item>
+    </style>
+</resources>
+
+==== app\src\main\res\values\bottom_nav_color.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<resources></resources>
+
+==== app\src\main\res\values\colors.xml ====
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="md_theme_light_primary">#6750A4</color>
+    <color name="md_theme_light_secondary">#625B71</color>
+    <color name="md_theme_light_tertiary">#7D5260</color>
+    <color name="md_theme_light_error">#B3261E</color>
+    <color name="md_theme_light_background">#FFFBFE</color>
+    <color name="md_theme_light_surface">#FFFBFE</color>
+    <color name="md_theme_light_onPrimary">#FFFFFF</color>
+    <color name="md_theme_light_onSecondary">#FFFFFF</color>
+    <color name="md_theme_light_onTertiary">#FFFFFF</color>
+    <color name="md_theme_light_onError">#FFFFFF</color>
+    <color name="md_theme_light_onBackground">#1C1B1F</color>
+    <color name="md_theme_light_onSurface">#1C1B1F</color>
+</resources>
+
+==== app\src\main\res\values\dimens.xml ====
+<resources>
+    <!-- Default screen margins, per the Android Design guidelines. -->
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+</resources>
+
+==== app\src\main\res\values\strings.xml ====
+<resources>
+<string name="app_name">Mueen</string>
+<string name="title_home">Home</string>
+<string name="title_dashboard">Dashboard</string>
+<string name="title_notifications">Notifications</string>
+<string name="timer_phase_focus">Focus Time</string>
+<string name="timer_phase_short_break">Short Break</string>
+<string name="timer_phase_long_break">Long Break</string>
+<string name="button_start">Start</string>
+<string name="button_pause">Pause</string>
+<string name="button_reset">Reset</string>
+<string name="button_skip">Skip</string>
+<string name="crn_label">CRN: 22598</string>
+<string name="group_members_label">ABDULRAHMAN ABDULLAH ALOBAIDI S210019932, \nALWALEED TALAL A ALMUTAIRI S210064728</string>
+<!-- Notes -->
+<string name="hint_enter_note">Enter your note here…</string>
+<string name="button_save_note">Save Note</string>
+<string name="label_no_notes">No notes yet!</string>
+<string name="desc_no_notes_icon">Icon indicating no notes</string>
+<string name="toast_note_saved">Note saved!</string>
+<string name="toast_enter_note">Please enter a note!</string>
+<string name="snackbar_note_deleted">Note deleted</string>
+<string name="snackbar_undo">Undo</string>
+<string name="hint_edit_note">Edit your note</string>
+<string name="dialog_title_edit_note">Edit Note</string>
+<string name="dialog_save">Save</string>
+<string name="dialog_cancel">Cancel</string>
+<string name="toast_note_updated">Note updated!</string>
+<string name="toast_note_cannot_be_empty">Note cannot be empty!</string>
+<string name="error_loading_note">Error loading note data.</string>
+<string name="error_updating_note">Error updating note.</string>
+<!-- Reminders -->
+<string name="header_add_reminder">Add New Reminder</string>
+<string name="hint_reminder_title_required">Reminder Title*</string>
+<string name="hint_reminder_description_optional">Description (Optional)</string>
+<string name="hint_select_date_time_required">Select Date &amp; Time*</string>
+<string name="button_set_reminder">Set Reminder</string>
+<string name="header_upcoming_reminders">Upcoming Reminders</string>
+<string name="label_no_reminders">No upcoming reminders!</string>
+<string name="desc_no_reminders_icon">Icon indicating no reminders</string>
+<string name="toast_enter_reminder_title">Please enter a title!</string>
+<string name="toast_select_date_time">Please select date and time!</string>
+<string name="toast_select_future_time">Please select a future time!</string>
+<string name="toast_reminder_set">Reminder set!</string>
+<string name="snackbar_reminder_deleted">Reminder deleted</string>
+<string name="error_saving_reminder">Error saving reminder.</string>
+<string name="error_scheduling_alarm">Error scheduling reminder alarm.</string>
+<string name="desc_add_reminder_fab">Add new reminder</string>
+<string name="dialog_title_add_reminder">Add Reminder</string>
+<string name="dialog_add">Add</string>
+<!-- Quotes -->
+<string name="button_new_quote">New Quote</string>
+<string name="default_quote_placeholder">Loading quote…</string>
+<!-- Notifications -->
+<string name="channel_name_reminders">Mueen Reminders</string>
+<string name="channel_description_reminders">Notifications for upcoming study reminders</string>
+<string name="channel_name_timer">Pomodoro Timer</string>
+<string name="channel_description_timer">Notifications for Pomodoro timer phase changes</string>
+<string name="notification_timer_phase_finished">"%1$s finished! Time for %2$s."</string>
+<string name="notification_timer_phase_skipped">"%1$s skipped! Starting %2$s."</string>
+<!-- General -->
+<string name="nav_timer">Timer</string>
+<string name="nav_notes">Notes</string>
+<string name="nav_reminders">Reminders</string>
+<string name="nav_quotes">Quotes</string>
+
+
+    <!-- ... Add ALL other strings you find ... -->
+</resources>
+
+==== app\src\main\res\values\themes.xml ====
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.IT_487_Project_3" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_theme_light_primary</item>
+        <item name="colorSecondary">@color/md_theme_light_secondary</item>
+        <item name="colorTertiary">@color/md_theme_light_tertiary</item>
+        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
+        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
+        <item name="colorOnTertiary">@color/md_theme_light_onTertiary</item>
+        <item name="android:statusBarColor">?attr/colorSurfaceVariant</item>
+    </style>
+</resources>
+
+==== app\src\main\res\xml\backup_rules.xml ====
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older that API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>
+
+==== app\src\main\res\xml\data_extraction_rules.xml ====
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>
+
